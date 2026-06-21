@@ -1,0 +1,725 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Yuma Toots — 3D Neighborhood</title>
+<style>
+  :root{ --ink:#1b2a24; --paper:#f3f0e7; --leaf:#3f7d4f; }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;background:#9cc6e0;touch-action:none;
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink)}
+  #app{position:fixed;inset:0}
+  canvas{display:block}
+
+  /* ---- start menu ---- */
+  #menu{position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:22px;padding:24px;text-align:center;
+    background:radial-gradient(120% 120% at 50% 0%,#bfe0f2 0%,#7fb0d6 55%,#5d92bd 100%)}
+  #menu h2{margin:0;font-size:clamp(26px,5vw,40px);letter-spacing:.4px;color:#13261c;
+    text-shadow:0 2px 0 rgba(255,255,255,.35)}
+  #menu .lead{margin:-10px 0 4px;font-size:13px;color:#274033;letter-spacing:1.5px;text-transform:uppercase}
+  #cards{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;max-width:680px}
+  .mode{width:190px;background:var(--paper);border:1px solid rgba(27,42,36,.12);border-radius:18px;
+    padding:22px 18px;cursor:pointer;transition:transform .12s,box-shadow .12s;box-shadow:0 10px 30px rgba(15,40,30,.22)}
+  .mode:hover{transform:translateY(-4px);box-shadow:0 16px 40px rgba(15,40,30,.3)}
+  .mode .ico{font-size:34px;line-height:1}
+  .mode h3{margin:10px 0 4px;font-size:18px}
+  .mode p{margin:0;font-size:12px;color:#5d6b62;line-height:1.45}
+  .mode.off{opacity:.5;cursor:not-allowed}
+  .mode.off:hover{transform:none;box-shadow:0 10px 30px rgba(15,40,30,.22)}
+  .mode .badge{display:inline-block;margin-top:10px;font-size:10px;letter-spacing:.5px;
+    text-transform:uppercase;color:#7a8a80}
+  #menu .foot{font-size:11px;color:#274033;opacity:.7;max-width:420px;line-height:1.5}
+
+  /* ---- hud ---- */
+  #hud{position:fixed;left:16px;top:16px;z-index:10;display:none;
+    background:rgba(243,240,231,.92);backdrop-filter:blur(6px);
+    border:1px solid rgba(27,42,36,.15);border-radius:14px;padding:13px 15px;max-width:235px;
+    box-shadow:0 8px 30px rgba(20,40,30,.18)}
+  #hud h1{margin:0 0 2px;font-size:15px}
+  #hud .sub{margin:0 0 9px;font-size:11px;color:#5d6b62;letter-spacing:.3px;text-transform:uppercase}
+  #hud .row{display:flex;align-items:center;gap:8px;font-size:12.5px;margin:5px 0;color:#33433b}
+  #hud kbd{font:600 11px ui-monospace,monospace;background:#fff;border:1px solid #cfd6cd;
+    border-bottom-width:2px;border-radius:5px;padding:1px 6px;min-width:18px;text-align:center}
+  #hud .grp{display:flex;gap:3px}
+
+  .btn{position:fixed;z-index:10;background:rgba(243,240,231,.92);border:1px solid rgba(27,42,36,.15);
+    border-radius:10px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;color:#33433b;display:none}
+  .btn:hover{background:#fff}
+  #reset{right:16px;top:16px}
+  #menuBtn{right:16px;top:54px}
+
+  /* desktop click veil */
+  #veil{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;
+    background:rgba(18,34,28,.4);cursor:pointer}
+  #veil span{background:var(--paper);padding:12px 22px;border-radius:999px;font-weight:600;font-size:13px;
+    box-shadow:0 12px 40px rgba(0,0,0,.3)}
+
+  /* mobile controls */
+  #joy{position:fixed;z-index:12;width:120px;height:120px;border-radius:50%;display:none;pointer-events:none;
+    border:2px solid rgba(255,255,255,.55);background:rgba(255,255,255,.12)}
+  #joyKnob{position:absolute;left:50%;top:50%;width:52px;height:52px;border-radius:50%;
+    transform:translate(-50%,-50%);background:rgba(255,255,255,.7);box-shadow:0 2px 10px rgba(0,0,0,.25)}
+  #jump{position:fixed;right:26px;bottom:36px;z-index:12;width:84px;height:84px;border-radius:50%;
+    display:none;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#1b2a24;
+    background:rgba(243,240,231,.85);border:2px solid rgba(255,255,255,.6);box-shadow:0 6px 20px rgba(0,0,0,.3);
+    user-select:none}
+  #jump:active{background:#fff}
+  #jetpack{position:fixed;right:130px;bottom:36px;z-index:12;width:84px;height:84px;border-radius:50%;
+    display:none;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#7a2a12;
+    background:rgba(255,206,140,.92);border:2px solid rgba(255,255,255,.65);
+    box-shadow:0 6px 20px rgba(0,0,0,.3);user-select:none;text-align:center;line-height:1.05}
+  #jetpack:active{background:#fff}
+  #fuel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:11;width:230px;display:none}
+  #fuel .bar{height:14px;border-radius:8px;background:rgba(20,40,30,.28);
+    border:1px solid rgba(255,255,255,.5);overflow:hidden;box-shadow:0 4px 14px rgba(0,0,0,.2)}
+  #fuel .fill{height:100%;width:100%;background:#49d06a;transition:width .08s linear,background .25s}
+  #fuel .lbl{margin-top:4px;font:700 11px ui-sans-serif,system-ui;letter-spacing:.6px;color:#1f3a2d;text-align:center}
+  #fuel.flash .bar{box-shadow:0 0 0 3px rgba(255,211,106,.85),0 4px 14px rgba(0,0,0,.2)}
+
+  #tag{position:fixed;right:14px;bottom:12px;z-index:8;font-size:10px;color:rgba(27,42,36,.5);
+    letter-spacing:.4px;display:none}
+</style>
+
+<div id="app"></div>
+
+<div id="menu">
+  <p class="lead">Yuma Toots · low-poly block</p>
+  <h2>Pick how you'll explore</h2>
+  <div id="cards">
+    <div class="mode" data-mode="desktop">
+      <div class="ico">🖥️</div><h3>Desktop</h3>
+      <p>Keyboard &amp; mouse. WASD to walk, mouse to look, space to jump.</p>
+      <span class="badge" id="badge-desktop">Mouse + keyboard</span>
+    </div>
+    <div class="mode" data-mode="mobile">
+      <div class="ico">📱</div><h3>Mobile</h3>
+      <p>Left thumb joystick to move, drag the right side to look, tap to jump.</p>
+      <span class="badge" id="badge-mobile">Touch</span>
+    </div>
+    <div class="mode" data-mode="vr">
+      <div class="ico">🥽</div><h3>VR — Quest</h3>
+      <p>Roomscale headset. Left stick glides where you look, right stick turns.</p>
+      <span class="badge" id="badge-vr">Checking headset…</span>
+    </div>
+  </div>
+  <p class="foot">Movement always follows where you're looking, and your character turns to face the way it's heading. You can switch modes anytime with the menu button.</p>
+</div>
+
+<div id="hud"></div>
+<button class="btn" id="reset">Reset position</button>
+<button class="btn" id="menuBtn">Menu</button>
+<div id="veil"><span>Click to lock mouse &amp; play ▶</span></div>
+
+<div id="joy"><div id="joyKnob"></div></div>
+<div id="jump">JUMP</div>
+<div id="jetpack">JET<br>PACK</div>
+<div id="fuel"><div class="bar"><div class="fill"></div></div><div class="lbl">JETPACK 10.0s</div></div>
+<div id="tag">low-poly recreation · not to scale</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const T = THREE;
+
+/* ---------------- deterministic RNG ---------------- */
+let _seed=1337;
+function rand(){_seed=(_seed*1664525+1013904223)&0xffffffff;return ((_seed>>>0)/4294967296);}
+function rr(a,b){return a+(b-a)*rand();}
+function pick(a){return a[Math.floor(rand()*a.length)];}
+
+/* ---------------- scene ---------------- */
+const app=document.getElementById('app');
+const scene=new T.Scene();
+scene.background=new T.Color(0x9fcce6);
+scene.fog=new T.Fog(0x9fcce6,120,360);
+
+const camera=new T.PerspectiveCamera(60,innerWidth/innerHeight,0.1,1000);
+
+const renderer=new T.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=T.PCFSoftShadowMap;
+renderer.xr.enabled=true;
+app.appendChild(renderer.domElement);
+const canvas=renderer.domElement;
+
+/* ---------------- light ---------------- */
+scene.add(new T.HemisphereLight(0xcfeaff,0x4f6b45,0.85));
+const sun=new T.DirectionalLight(0xfff3d6,1.05);
+sun.position.set(80,140,40);
+sun.castShadow=true; sun.shadow.mapSize.set(2048,2048);
+const S=200;
+sun.shadow.camera.left=-S;sun.shadow.camera.right=S;sun.shadow.camera.top=S;sun.shadow.camera.bottom=-S;
+sun.shadow.camera.near=10;sun.shadow.camera.far=400;sun.shadow.bias=-0.0004;
+scene.add(sun);
+
+/* ---------------- ground ---------------- */
+const WORLD=320;
+const ground=new T.Mesh(new T.PlaneGeometry(WORLD*2,WORLD*2),new T.MeshLambertMaterial({color:0x6fa45a}));
+ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; scene.add(ground);
+const patchMat=new T.MeshLambertMaterial({color:0x659a52});
+for(let i=0;i<70;i++){
+  const p=new T.Mesh(new T.PlaneGeometry(rr(14,40),rr(14,40)),patchMat);
+  p.rotation.x=-Math.PI/2; p.position.set(rr(-WORLD,WORLD),0.02,rr(-WORLD,WORLD));
+  p.receiveShadow=true; scene.add(p);
+}
+
+/* ---------------- colliders ---------------- */
+const colliders=[];
+function addCollider(x,z,hx,hz){colliders.push({x,z,hx,hz});}
+
+/* ---------------- roads ---------------- */
+const roadPaths=[
+  [[-260,-70],[-170,-50],[-90,-20],[-10,10],[70,30],[150,20],[230,-30],[290,-90]],
+  [[-260,90],[-150,80],[-40,70],[60,90],[150,120],[250,110]],
+  [[70,30],[110,-30],[150,-90],[210,-150]],
+  [[60,90],[40,40],[30,-5],[-10,10]],
+  [[-150,80],[-200,30],[-250,-10]],
+];
+const roadMat=new T.MeshLambertMaterial({color:0xb9b3a6});
+const ROAD_W=9;
+function buildRoad(pts){
+  for(let i=0;i<pts.length-1;i++){
+    const [x1,z1]=pts[i],[x2,z2]=pts[i+1];
+    const dx=x2-x1,dz=z2-z1,len=Math.hypot(dx,dz),ang=Math.atan2(dz,dx);
+    const seg=new T.Mesh(new T.PlaneGeometry(len+ROAD_W,ROAD_W),roadMat);
+    seg.rotation.x=-Math.PI/2; seg.rotation.z=-ang;
+    seg.position.set((x1+x2)/2,0.05,(z1+z2)/2); seg.receiveShadow=true; scene.add(seg);
+    const cap=new T.Mesh(new T.CircleGeometry(ROAD_W/2,16),roadMat);
+    cap.rotation.x=-Math.PI/2; cap.position.set(x1,0.051,z1); scene.add(cap);
+  }
+  const last=pts[pts.length-1];
+  const cap=new T.Mesh(new T.CircleGeometry(ROAD_W/2,16),roadMat);
+  cap.rotation.x=-Math.PI/2; cap.position.set(last[0],0.051,last[1]); scene.add(cap);
+}
+roadPaths.forEach(buildRoad);
+function distToRoads(x,z){
+  let best=1e9;
+  for(const p of roadPaths)for(let i=0;i<p.length-1;i++){
+    const ax=p[i][0],az=p[i][1],bx=p[i+1][0],bz=p[i+1][1],dx=bx-ax,dz=bz-az;
+    const t=Math.max(0,Math.min(1,((x-ax)*dx+(z-az)*dz)/(dx*dx+dz*dz)));
+    best=Math.min(best,Math.hypot(x-(ax+dx*t),z-(az+dz*t)));
+  }
+  return best;
+}
+function roadAngleAt(x,z){
+  let best=1e9,ang=0;
+  for(const p of roadPaths)for(let i=0;i<p.length-1;i++){
+    const ax=p[i][0],az=p[i][1],bx=p[i+1][0],bz=p[i+1][1],dx=bx-ax,dz=bz-az;
+    const t=Math.max(0,Math.min(1,((x-ax)*dx+(z-az)*dz)/(dx*dx+dz*dz)));
+    const d=Math.hypot(x-(ax+dx*t),z-(az+dz*t));
+    if(d<best){best=d;ang=Math.atan2(dz,dx);}
+  }
+  return ang;
+}
+
+/* ---------------- pond ---------------- */
+const POND={x:225,z:-150,rx:46*1.35,rz:46};
+const pond=new T.Mesh(new T.CircleGeometry(46,40),new T.MeshLambertMaterial({color:0x3f78a8,transparent:true,opacity:.92}));
+pond.rotation.x=-Math.PI/2; pond.scale.set(1.35,1,1); pond.position.set(POND.x,0.06,POND.z); scene.add(pond);
+const shore=new T.Mesh(new T.RingGeometry(46,52,40),new T.MeshLambertMaterial({color:0xc9b98a}));
+shore.rotation.x=-Math.PI/2; shore.scale.set(1.35,1,1); shore.position.set(POND.x,0.05,POND.z); scene.add(shore);
+function inPond(x,z){const dx=(x-POND.x)/POND.rx,dz=(z-POND.z)/POND.rz;return dx*dx+dz*dz<1.15;}
+
+/* ---------------- houses ---------------- */
+const roofColors=[0x6b6f76,0x8a5a44,0xb5713f,0xc24a3a,0x9a8b6e,0x55606b,0xa8643f,0x7a8290];
+const wallColors=[0xe9e3d6,0xd8cdb8,0xe7ddc8,0xdcd3c0,0xe3d9c4,0xcfc3ad];
+function makeHouse(x,z,angle){
+  const g=new T.Group();
+  const w=rr(11,17),d=rr(9,14),h=rr(6,9);
+  const wallMat=new T.MeshLambertMaterial({color:pick(wallColors)});
+  const body=new T.Mesh(new T.BoxGeometry(w,h,d),wallMat);
+  body.position.y=h/2; body.castShadow=true; body.receiveShadow=true; g.add(body);
+  if(rand()<0.45){
+    const w2=rr(6,10),d2=rr(7,11),h2=h*rr(.8,1);
+    const wing=new T.Mesh(new T.BoxGeometry(w2,h2,d2),wallMat);
+    wing.position.set(w/2-w2/2*rr(.2,.8),h2/2,d/2+d2/2-rr(1,3));
+    wing.castShadow=true; wing.receiveShadow=true; g.add(wing);
+    const wr=new T.Mesh(new T.ConeGeometry(Math.max(w2,d2)*.72,rr(3.5,5),4),new T.MeshLambertMaterial({color:pick(roofColors)}));
+    wr.rotation.y=Math.PI/4; wr.position.set(wing.position.x,h2+rr(1.6,2.4),wing.position.z); wr.castShadow=true; g.add(wr);
+  }
+  const roof=new T.Mesh(new T.ConeGeometry(Math.max(w,d)*.7,rr(4.5,7),4),new T.MeshLambertMaterial({color:pick(roofColors)}));
+  roof.rotation.y=Math.PI/4; roof.position.y=h+roof.geometry.parameters.height/2-0.2; roof.castShadow=true; g.add(roof);
+  const winMat=new T.MeshLambertMaterial({color:0x2c3a44});
+  for(let i=0;i<3;i++){
+    const win=new T.Mesh(new T.PlaneGeometry(1.6,1.8),winMat);
+    win.position.set(rr(-w/2+1.5,w/2-1.5),rr(2,h-1.5),d/2+0.02); g.add(win);
+  }
+  const door=new T.Mesh(new T.PlaneGeometry(1.8,3),new T.MeshLambertMaterial({color:0x5b3f2c}));
+  door.position.set(0,1.5,d/2+0.02); g.add(door);
+  g.position.set(x,0,z); g.rotation.y=angle; scene.add(g);
+  addCollider(x,z,Math.max(w,d)/2+0.6,Math.max(w,d)/2+0.6);
+}
+
+/* ---------------- trees ---------------- */
+function makePine(x,z){
+  const g=new T.Group();
+  const trunk=new T.Mesh(new T.CylinderGeometry(0.4,0.6,rr(2,3.5),6),new T.MeshLambertMaterial({color:0x6b4a2f}));
+  const th=trunk.geometry.parameters.height; trunk.position.y=th/2; trunk.castShadow=true; g.add(trunk);
+  const green=pick([0x2f5d36,0x356b3d,0x274d2c,0x3c7a45]); let y=th;
+  for(let i=0,n=Math.floor(rr(2,4));i<n;i++){
+    const r=rr(2.6,3.6)*(1-i*.18),hh=rr(3,4.2);
+    const c=new T.Mesh(new T.ConeGeometry(r,hh,7),new T.MeshLambertMaterial({color:green}));
+    c.position.y=y+hh/2-0.6; c.castShadow=true; g.add(c); y+=hh*0.55;
+  }
+  g.position.set(x,0,z); g.scale.setScalar(rr(0.8,1.5)); scene.add(g); addCollider(x,z,1.4,1.4);
+}
+function makeRound(x,z){
+  const g=new T.Group();
+  const trunk=new T.Mesh(new T.CylinderGeometry(0.5,0.7,rr(2.5,4),6),new T.MeshLambertMaterial({color:0x6f4d30}));
+  const th=trunk.geometry.parameters.height; trunk.position.y=th/2; trunk.castShadow=true; g.add(trunk);
+  const green=pick([0x3f7d49,0x4f8a55,0x356b3d,0x5b9a5e,0x2f5d36]);
+  for(let i=0,n=Math.floor(rr(2,4));i<n;i++){
+    const s=new T.Mesh(new T.SphereGeometry(rr(2.4,3.8),8,6),new T.MeshLambertMaterial({color:green}));
+    s.position.set(rr(-1.5,1.5),th+rr(0,2.5),rr(-1.5,1.5)); s.castShadow=true; g.add(s);
+  }
+  g.position.set(x,0,z); g.scale.setScalar(rr(0.85,1.5)); scene.add(g); addCollider(x,z,1.6,1.6);
+}
+
+/* ---------------- populate ---------------- */
+const placed=[];
+function farFromPlaced(x,z,m){for(const p of placed)if(Math.hypot(x-p.x,z-p.z)<m)return false;return true;}
+for(let a=0,h=0;h<46&&a<4000;a++){
+  const x=rr(-WORLD+30,WORLD-30),z=rr(-WORLD+30,WORLD-30),d=distToRoads(x,z);
+  if(d<14||d>30||inPond(x,z)||!farFromPlaced(x,z,26))continue;
+  const ra=roadAngleAt(x,z);
+  const ahead=(distToRoads(x+Math.sin(ra)*4,z-Math.cos(ra)*4)<d)?ra+Math.PI/2:ra-Math.PI/2;
+  makeHouse(x,z,-ahead); placed.push({x,z}); h++;
+}
+for(let a=0,t=0;t<260&&a<9000;a++){
+  const x=rr(-WORLD,WORLD),z=rr(-WORLD,WORLD);
+  if(distToRoads(x,z)<7||inPond(x,z))continue;
+  let near=false; for(const p of placed)if(Math.hypot(x-p.x,z-p.z)<10){near=true;break;}
+  if(near)continue;
+  (rand()<0.55?makePine:makeRound)(x,z); t++;
+}
+
+/* ---------------- blue map pin ---------------- */
+const pinGroup=new T.Group();
+const ph=new T.Mesh(new T.SphereGeometry(2.4,20,16,0,Math.PI*2,0,Math.PI*.62),new T.MeshLambertMaterial({color:0x2f6df0}));
+ph.rotation.x=Math.PI; ph.position.y=8;
+const pt=new T.Mesh(new T.ConeGeometry(2.4,4.4,20),new T.MeshLambertMaterial({color:0x2f6df0}));
+pt.rotation.x=Math.PI; pt.position.y=5.1;
+const pd=new T.Mesh(new T.SphereGeometry(0.9,12,12),new T.MeshBasicMaterial({color:0xffffff})); pd.position.y=8.2;
+pinGroup.add(ph,pt,pd); pinGroup.position.set(-5,0,8); scene.add(pinGroup);
+
+/* ---------------- character ---------------- */
+const player=new T.Group();
+const skin=0xffcf9e,shirt=0x2f6df0,pants=0x33414d;
+const box=(w,h,d,c)=>new T.Mesh(new T.BoxGeometry(w,h,d),new T.MeshLambertMaterial({color:c}));
+const torso=box(2.2,2.6,1.1,shirt); torso.position.y=3.3; torso.castShadow=true; player.add(torso);
+const head=box(1.5,1.5,1.5,skin); head.position.y=5.35; head.castShadow=true; player.add(head);
+const eyeMat=new T.MeshBasicMaterial({color:0x222222});
+[-0.35,0.35].forEach(ex=>{const e=new T.Mesh(new T.PlaneGeometry(0.22,0.3),eyeMat);e.position.set(ex,5.45,0.76);player.add(e);});
+const armL=box(0.8,2.4,0.9,skin); armL.position.set(-1.55,3.4,0); armL.castShadow=true; player.add(armL);
+const armR=box(0.8,2.4,0.9,skin); armR.position.set(1.55,3.4,0); armR.castShadow=true; player.add(armR);
+const legL=box(0.95,2.4,0.95,pants); legL.position.set(-0.55,1.1,0); legL.castShadow=true; player.add(legL);
+const legR=box(0.95,2.4,0.95,pants); legR.position.set(0.55,1.1,0); legR.castShadow=true; player.add(legR);
+const SPAWN=new T.Vector3(-30,0,12);
+player.position.copy(SPAWN); scene.add(player);
+
+/* ---------------- VR rig ---------------- */
+const dolly=new T.Group(); dolly.position.copy(SPAWN); scene.add(dolly);
+
+/* ---------------- shared state ---------------- */
+let mode=null;                 // 'desktop' | 'mobile' | 'vr'
+let yaw=0.6, pitch=0.5, dist=18;
+let vy=0,onGround=true,facing=0,walkPhase=0;
+let vrVY=0,vrOnGround=true;
+const GRAV=-55,JUMP=20,SPEED=16,SPRINT=27,RADIUS=1.4;
+const input={fwd:0,strafe:0,sprint:false,jump:false}; // fwd/strafe in [-1,1], jump = edge request
+
+/* ---------------- jetpack: fuel, thrust, fumes, pickups ---------------- */
+const FUEL_MAX=12, REFILL=5, THRUST=100, MAX_RISE=20, TERMINAL=-45, FUEL_START=10;
+let fuel=FUEL_START;     // seconds of thrust remaining
+let jbtnHeld=false;      // on-screen / touch jetpack button held
+function jetpackHeld(){
+  if(mode==='desktop')return !!keys['Space']||jbtnHeld; // hold Space or the button
+  if(mode==='mobile')return jbtnHeld;
+  return false;          // VR handled inline via controller trigger
+}
+
+// fume particle pool (recycled spheres expelled downward)
+const smoke=[]; const SMOKE_N=56;
+for(let i=0;i<SMOKE_N;i++){
+  const m=new T.Mesh(new T.SphereGeometry(0.5,6,5),
+    new T.MeshLambertMaterial({color:0xdedede,transparent:true,opacity:0,depthWrite:false}));
+  m.visible=false; m.userData={life:0,vx:0,vy:0,vz:0}; scene.add(m); smoke.push(m);
+}
+let smokePtr=0;
+function emitSmoke(x,y,z){
+  const m=smoke[smokePtr]; smokePtr=(smokePtr+1)%SMOKE_N;
+  m.visible=true;
+  m.position.set(x+(Math.random()-.5)*0.8, y, z+(Math.random()-.5)*0.8);
+  m.scale.setScalar(0.5+Math.random()*0.5);
+  const u=m.userData; u.life=0.4+Math.random()*0.35;
+  u.vx=(Math.random()-.5)*5; u.vy=-7-Math.random()*5; u.vz=(Math.random()-.5)*5;
+  const greens=[0x9be88a,0x6fd36a,0x49b35a,0x2f8f3a,0xd6f7c8];
+  m.material.color.setHex(greens[(Math.random()*greens.length)|0]);
+  m.material.opacity=0.9;
+}
+function updateSmoke(dt){
+  for(const m of smoke){
+    if(!m.visible)continue;
+    const u=m.userData; u.life-=dt;
+    if(u.life<=0){m.visible=false; continue;}
+    m.position.x+=u.vx*dt; m.position.y+=u.vy*dt; m.position.z+=u.vz*dt;
+    u.vy+=22*dt;                       // billow / slow the downward jet
+    m.scale.multiplyScalar(1+dt*1.8);
+    m.material.opacity=Math.max(0,u.life*1.4);
+  }
+}
+
+// fuel-tank pickups scattered in the world
+const tanks=[];
+function makeTank(x,z){
+  const g=new T.Group();
+  const brown=0xc7a16a, band=0xb07d4a, lid=0xc9ccce;
+  const body=new T.Mesh(new T.CylinderGeometry(0.75,0.75,1.6,16),new T.MeshLambertMaterial({color:brown})); body.position.y=1.1; body.castShadow=true;
+  const label=new T.Mesh(new T.CylinderGeometry(0.77,0.77,0.7,16),new T.MeshLambertMaterial({color:band})); label.position.y=1.1;
+  const top=new T.Mesh(new T.CylinderGeometry(0.78,0.78,0.12,16),new T.MeshLambertMaterial({color:lid})); top.position.y=1.92;
+  const bot=new T.Mesh(new T.CylinderGeometry(0.78,0.78,0.12,16),new T.MeshLambertMaterial({color:lid})); bot.position.y=0.36;
+  const glow=new T.Mesh(new T.SphereGeometry(1.5,12,10),new T.MeshBasicMaterial({color:0xffe6a8,transparent:true,opacity:0.08})); glow.position.y=1.1;
+  g.add(body,label,top,bot,glow);
+  g.position.set(x,0,z); g.userData={active:true,respawn:0,phase:Math.random()*6};
+  scene.add(g); tanks.push(g);
+}
+for(let a=0,n=0;n<16&&a<3000;a++){
+  const x=rr(-WORLD+20,WORLD-20),z=rr(-WORLD+20,WORLD-20);
+  if(inPond(x,z)||distToRoads(x,z)<4)continue;
+  makeTank(x,z); n++;
+}
+function updatePickups(dt,px,py,pz){
+  for(const t of tanks){
+    const u=t.userData;
+    if(u.active){
+      t.rotation.y+=dt*1.6;
+      t.position.y=Math.sin(performance.now()*0.0028+u.phase)*0.35;
+      const dx=t.position.x-px, dz=t.position.z-pz, dy=(t.position.y+1.3)-py;
+      if(dx*dx+dz*dz<9 && dy*dy<25){     // ~3 units horizontal, ~5 vertical
+        u.active=false; t.visible=false; u.respawn=18;
+        fuel=Math.min(FUEL_MAX,fuel+REFILL); flashFuel();
+      }
+    } else {
+      u.respawn-=dt;
+      if(u.respawn<=0){u.active=true; t.visible=true;}
+    }
+  }
+}
+
+// VR heads-up fuel bar (attached to the headset camera, shown only in VR)
+const vrFuel=new T.Group();
+const vfBg=new T.Mesh(new T.PlaneGeometry(0.32,0.05),new T.MeshBasicMaterial({color:0x10241c}));
+const vfFill=new T.Mesh(new T.PlaneGeometry(0.3,0.035),new T.MeshBasicMaterial({color:0x49d06a}));
+vfBg.position.z=-0.001; vfFill.position.z=0.001;
+vrFuel.add(vfBg,vfFill); vrFuel.position.set(0,-0.24,-0.7); vrFuel.visible=false;
+camera.add(vrFuel);
+
+function updateFuelUI(){
+  const frac=Math.max(0,Math.min(1,fuel/FUEL_MAX));
+  if(typeof fuelFill!=='undefined'&&fuelFill){
+    fuelFill.style.width=(frac*100)+'%';
+    fuelFill.style.background=frac>0.5?'#49d06a':frac>0.2?'#f4c542':'#e0492f';
+    fuelText.textContent='JETPACK  '+fuel.toFixed(1)+'s';
+  }
+  if(vrFuel.visible){
+    vfFill.scale.x=Math.max(0.001,frac); vfFill.position.x=-0.15*(1-frac);
+    vfFill.material.color.setHex(frac>0.5?0x49d06a:frac>0.2?0xf4c542:0xe0492f);
+  }
+}
+
+function resolveCollisions(pos){
+  for(const c of colliders){
+    const dx=pos.x-c.x,dz=pos.z-c.z;
+    const ox=c.hx+RADIUS-Math.abs(dx), oz=c.hz+RADIUS-Math.abs(dz);
+    if(ox>0&&oz>0){ if(ox<oz)pos.x+=(dx>0?ox:-ox); else pos.z+=(dz>0?oz:-oz); }
+  }
+  const lim=WORLD-4;
+  pos.x=Math.max(-lim,Math.min(lim,pos.x)); pos.z=Math.max(-lim,Math.min(lim,pos.z));
+}
+
+/* ---------------- DESKTOP controls ---------------- */
+const keys={};
+addEventListener('keydown',e=>{keys[e.code]=true; if(e.code==='Space')e.preventDefault();});
+addEventListener('keyup',e=>{keys[e.code]=false;});
+const veil=document.getElementById('veil');
+let mouseDown=false, started=false;
+function tryLock(){ try{ const p=canvas.requestPointerLock&&canvas.requestPointerLock(); if(p&&p.catch)p.catch(()=>{}); }catch(e){} }
+function beginDesktop(){ if(mode!=='desktop')return; veil.style.display='none'; started=true; tryLock(); }
+canvas.addEventListener('mousedown',()=>{mouseDown=true;});
+addEventListener('mouseup',()=>{mouseDown=false;});
+canvas.addEventListener('click',beginDesktop);
+veil.addEventListener('click',beginDesktop);
+addEventListener('mousemove',e=>{
+  if(mode!=='desktop'||!started)return;
+  const locked=document.pointerLockElement===canvas;
+  if(!locked&&!mouseDown)return;          // when not locked, drag to look
+  yaw-=e.movementX*0.0026; pitch+=e.movementY*0.0026;
+  pitch=Math.max(-0.15,Math.min(1.25,pitch));
+});
+addEventListener('wheel',e=>{ if(mode==='desktop')dist=Math.max(8,Math.min(40,dist+e.deltaY*0.02)); },{passive:true});
+
+/* ---------------- MOBILE controls ---------------- */
+const joy=document.getElementById('joy'),joyKnob=document.getElementById('joyKnob'),jumpBtn=document.getElementById('jump');
+let moveId=null,lookId=null,moveOrig={x:0,y:0},lookLast={x:0,y:0};
+function touchStart(e){
+  if(mode!=='mobile')return;
+  for(const t of e.changedTouches){
+    if(t.clientX<innerWidth*0.5&&moveId===null){
+      moveId=t.identifier; moveOrig={x:t.clientX,y:t.clientY};
+      joy.style.display='block'; joy.style.left=(t.clientX-60)+'px'; joy.style.top=(t.clientY-60)+'px';
+      joyKnob.style.left='50%'; joyKnob.style.top='50%';
+    } else if(t.clientX>=innerWidth*0.5&&lookId===null){
+      lookId=t.identifier; lookLast={x:t.clientX,y:t.clientY};
+    }
+  }
+  e.preventDefault();
+}
+function touchMove(e){
+  if(mode!=='mobile')return;
+  for(const t of e.changedTouches){
+    if(t.identifier===moveId){
+      let dx=t.clientX-moveOrig.x, dy=t.clientY-moveOrig.y;
+      const len=Math.hypot(dx,dy), max=52;
+      if(len>max){dx*=max/len;dy*=max/len;}
+      joyKnob.style.left=(50+dx/120*100)+'%'; joyKnob.style.top=(50+dy/120*100)+'%';
+      input.strafe=dx/max; input.fwd=dy/max; input.sprint=(Math.hypot(dx,dy)/max)>0.82;
+    } else if(t.identifier===lookId){
+      yaw-=(t.clientX-lookLast.x)*0.005; pitch+=(t.clientY-lookLast.y)*0.005;
+      pitch=Math.max(-0.15,Math.min(1.25,pitch)); lookLast={x:t.clientX,y:t.clientY};
+    }
+  }
+  e.preventDefault();
+}
+function touchEnd(e){
+  for(const t of e.changedTouches){
+    if(t.identifier===moveId){moveId=null;input.fwd=0;input.strafe=0;input.sprint=false;joy.style.display='none';}
+    if(t.identifier===lookId)lookId=null;
+  }
+}
+canvas.addEventListener('touchstart',touchStart,{passive:false});
+canvas.addEventListener('touchmove',touchMove,{passive:false});
+canvas.addEventListener('touchend',touchEnd);
+canvas.addEventListener('touchcancel',touchEnd);
+jumpBtn.addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();input.jump=true;});
+
+/* jetpack button (press-and-hold) + fuel gauge refs */
+const jetpackBtn=document.getElementById('jetpack');
+const fuelBox=document.getElementById('fuel');
+const fuelFill=fuelBox.querySelector('.fill');
+const fuelText=fuelBox.querySelector('.lbl');
+function jpDown(e){e.preventDefault();jbtnHeld=true;}
+function jpUp(){jbtnHeld=false;}
+jetpackBtn.addEventListener('mousedown',jpDown);
+jetpackBtn.addEventListener('touchstart',jpDown,{passive:false});
+window.addEventListener('mouseup',jpUp);
+jetpackBtn.addEventListener('touchend',jpUp);
+jetpackBtn.addEventListener('touchcancel',jpUp);
+function flashFuel(){ if(!fuelBox)return; fuelBox.classList.add('flash'); setTimeout(()=>fuelBox.classList.remove('flash'),220); }
+
+/* ---------------- VR ---------------- */
+let vrSupported=false;
+if(navigator.xr&&navigator.xr.isSessionSupported){
+  navigator.xr.isSessionSupported('immersive-vr').then(ok=>{
+    vrSupported=ok;
+    document.getElementById('badge-vr').textContent=ok?'Headset ready':'No headset detected';
+    if(!ok)document.querySelector('[data-mode="vr"]').classList.add('off');
+  }).catch(()=>{document.getElementById('badge-vr').textContent='No headset detected';
+    document.querySelector('[data-mode="vr"]').classList.add('off');});
+}else{
+  document.getElementById('badge-vr').textContent='WebXR unavailable';
+  document.querySelector('[data-mode="vr"]').classList.add('off');
+}
+async function enterVR(){
+  if(!vrSupported){alert('No VR headset detected. Open this page in the Quest browser to play in VR.');return;}
+  try{
+    const session=await navigator.xr.requestSession('immersive-vr',{optionalFeatures:['local-floor','bounded-floor']});
+    renderer.xr.setReferenceSpaceType('local-floor');
+    await renderer.xr.setSession(session);
+    dolly.add(camera);                 // headset drives camera inside the rig
+    player.visible=false;              // first-person in VR
+    vrFuel.visible=true;               // show the headset fuel bar
+    mode='vr';
+    session.addEventListener('end',()=>location.reload());
+  }catch(err){ alert('Could not start VR: '+err.message); }
+}
+const tmpDir=new T.Vector3(), tmpV=new T.Vector3();
+function updateVR(dt){
+  const session=renderer.xr.getSession(); if(!session)return;
+  let mx=0,my=0,turn=0,jumpPressed=false,jetHeld=false;
+  for(const src of session.inputSources){
+    if(!src.gamepad)continue;
+    const ax=src.gamepad.axes, sx=ax.length>=4?ax[2]:ax[0], sy=ax.length>=4?ax[3]:ax[1];
+    if(src.handedness==='right'){ if(Math.abs(sx)>0.25)turn=sx; }
+    else { mx+=sx; my+=sy; }       // left hand (or unknown) = locomotion
+    const trig=src.gamepad.buttons[0]; if(trig&&trig.pressed)jetHeld=true; // trigger = jetpack
+    // jump on A/X (button index 4) if present
+    const b4=src.gamepad.buttons[4];
+    if(b4&&b4.pressed)jumpPressed=true;
+  }
+  // smooth turn about the headset
+  if(Math.abs(turn)>0.25){
+    const a=-turn*1.8*dt;
+    camera.getWorldPosition(tmpV);
+    dolly.position.sub(tmpV);
+    dolly.position.applyAxisAngle(new T.Vector3(0,1,0),a);
+    dolly.position.add(tmpV);
+    dolly.rotation.y+=a;
+  }
+  // glide where the head looks
+  const dz=Math.abs(my)>0.12?-my:0, dx=Math.abs(mx)>0.12?mx:0;
+  if(dz||dx){
+    camera.getWorldDirection(tmpDir); tmpDir.y=0; tmpDir.normalize();
+    const right=new T.Vector3(-tmpDir.z,0,tmpDir.x);
+    tmpV.set(0,0,0).addScaledVector(tmpDir,dz).addScaledVector(right,dx);
+    if(tmpV.lengthSq()>0){tmpV.normalize();
+      dolly.position.addScaledVector(tmpV,SPEED*dt);
+    }
+  }
+  // jetpack thrust + jump + gravity on the rig
+  if(vrOnGround&&jumpPressed){vrVY=JUMP;vrOnGround=false;}
+  if(jetHeld&&fuel>0){
+    vrVY+=THRUST*dt; fuel=Math.max(0,fuel-dt); vrOnGround=false;
+    emitSmoke(dolly.position.x,dolly.position.y+0.2,dolly.position.z);
+  }
+  vrVY+=GRAV*dt; vrVY=Math.max(TERMINAL,Math.min(vrVY,MAX_RISE));
+  dolly.position.y+=vrVY*dt; dolly.position.y=Math.min(dolly.position.y,140);
+  if(dolly.position.y<=0){dolly.position.y=0; if(vrVY<0)vrVY=0; vrOnGround=true;}
+  resolveCollisions(dolly.position);
+}
+
+/* ---------------- desktop/mobile third-person update ---------------- */
+function updateGround(dt){
+  let ix=input.strafe, iz=input.fwd;
+  if(mode==='desktop'){
+    ix=0;iz=0;
+    if(keys['KeyW'])iz-=1; if(keys['KeyS'])iz+=1;
+    if(keys['KeyA'])ix-=1; if(keys['KeyD'])ix+=1;
+    input.sprint=keys['ShiftLeft']||keys['ShiftRight'];
+    if(keys['Space']&&onGround){input.jump=true;}
+  }
+  const moving=Math.hypot(ix,iz)>0.05;
+  const spd=input.sprint?SPRINT:SPEED;
+  if(moving){
+    let len=Math.hypot(ix,iz); if(len>1){ix/=len;iz/=len;}
+    const sin=Math.sin(yaw),cos=Math.cos(yaw);
+    // forward(-iz) follows the camera's look direction; strafe(ix) follows screen-right
+    const dirX=ix*cos+iz*sin, dirZ=-ix*sin+iz*cos;
+    const m=Math.min(1,Math.hypot(ix,iz));
+    player.position.x+=dirX*spd*dt; player.position.z+=dirZ*spd*dt;
+    const target=Math.atan2(dirX,dirZ);
+    let diff=target-facing; diff=Math.atan2(Math.sin(diff),Math.cos(diff));
+    facing+=diff*Math.min(1,dt*14);
+    if(onGround)walkPhase+=dt*spd*0.9*m; else walkPhase*=0.86;
+  } else walkPhase*=0.8;
+
+  if(input.jump&&onGround){vy=JUMP;onGround=false;}
+  input.jump=false;
+  if(jetpackHeld()&&fuel>0){                 // hold to thrust upward; fumes shoot down
+    vy+=THRUST*dt; fuel=Math.max(0,fuel-dt); onGround=false;
+    emitSmoke(player.position.x,player.position.y+0.4,player.position.z);
+    if(Math.random()<0.7)emitSmoke(player.position.x,player.position.y+0.4,player.position.z);
+  }
+  vy+=GRAV*dt; vy=Math.max(TERMINAL,Math.min(vy,MAX_RISE));
+  player.position.y+=vy*dt; player.position.y=Math.min(player.position.y,140);
+  if(player.position.y<=0){player.position.y=0; if(vy<0)vy=0; onGround=true;}
+  resolveCollisions(player.position);
+  player.rotation.y=facing;
+
+  const sw=Math.sin(walkPhase)*0.6;
+  legL.rotation.x=sw; legR.rotation.x=-sw; armL.rotation.x=-sw; armR.rotation.x=sw;
+  // pants grow with fuel, quantized to 2-second increments
+  const LEG_MIN=0.5, LEG_MAX=1.7, HALF=1.2;
+  const fuelStep=Math.floor(fuel/2)*2;                 // 0,2,4,...,12
+  const ls=LEG_MIN+(LEG_MAX-LEG_MIN)*Math.max(0,Math.min(1,fuelStep/FUEL_MAX));
+  legL.scale.setScalar(ls); legR.scale.setScalar(ls);
+  legL.position.y=HALF*ls;  legR.position.y=HALF*ls;   // keep feet on the ground
+  if(!onGround){armL.rotation.x-=0.5;armR.rotation.x-=0.5;}
+
+  const cx=player.position.x+Math.sin(yaw)*Math.cos(pitch)*dist;
+  const cy=player.position.y+4+Math.sin(pitch)*dist;
+  const cz=player.position.z+Math.cos(yaw)*Math.cos(pitch)*dist;
+  camera.position.lerp(tmpV.set(cx,cy,cz),0.18);
+  camera.lookAt(player.position.x,player.position.y+3.5,player.position.z);
+}
+
+/* ---------------- loop ---------------- */
+const clock=new T.Clock();
+renderer.setAnimationLoop(()=>{
+  const dt=Math.min(clock.getDelta(),0.05);
+  if(mode==='vr'&&renderer.xr.isPresenting) updateVR(dt);
+  else if(mode==='desktop'||mode==='mobile') updateGround(dt);
+  if(mode){
+    const pos=(mode==='vr')?dolly.position:player.position;
+    updatePickups(dt,pos.x,pos.y,pos.z);
+    updateSmoke(dt);
+    fuel=Math.min(FUEL_MAX,fuel+dt/6);   // slow passive regen: ~1s per 6s
+    updateFuelUI();
+  }
+  pinGroup.rotation.y+=dt*0.8;
+  pinGroup.position.y=Math.sin(performance.now()*0.002)*0.6;
+  renderer.render(scene,camera);
+});
+addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+/* ---------------- menu wiring ---------------- */
+const menu=document.getElementById('menu'),hud=document.getElementById('hud');
+const resetBtn=document.getElementById('reset'),menuBtn=document.getElementById('menuBtn');
+const tag=document.getElementById('tag');
+
+if(/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)){
+  document.getElementById('badge-mobile').textContent='Recommended here';
+}else{
+  document.getElementById('badge-desktop').textContent='Recommended here';
+}
+
+const HUDS={
+  desktop:`<h1>Yuma Toots</h1><p class="sub">Desktop</p>
+    <div class="row"><span class="grp"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span> Move</div>
+    <div class="row"><kbd>Space</kbd> Jump · hold to jetpack</div><div class="row"><kbd>Shift</kbd> Sprint</div>
+    <div class="row">🛢️ Grab tanks to refuel</div>
+    <div class="row">🖱️ Look · scroll to zoom · <kbd>Esc</kbd> release</div>`,
+  mobile:`<h1>Yuma Toots</h1><p class="sub">Mobile</p>
+    <div class="row">🕹️ Left thumb · move</div><div class="row">👉 Drag right · look</div>
+    <div class="row">🟢 JUMP · 🟠 hold JETPACK</div><div class="row">🛢️ Grab tanks to refuel</div>`,
+  vr:`<h1>Yuma Toots</h1><p class="sub">VR</p>
+    <div class="row">Left stick · glide where you look</div><div class="row">Right stick · turn</div>
+    <div class="row">Trigger · hold to jetpack · A/X · jump</div>
+    <div class="row">Fly into tanks to refuel</div>`
+};
+
+function startMode(m){
+  mode=m; menu.style.display='none';
+  hud.innerHTML=HUDS[m]; hud.style.display='block';
+  resetBtn.style.display='block'; menuBtn.style.display='block'; tag.style.display='block';
+  veil.style.display='none'; joy.style.display='none'; jumpBtn.style.display='none';
+  jetpackBtn.style.display='none'; fuelBox.style.display='none';
+  if(m==='desktop'){ started=false; veil.style.display='flex'; jetpackBtn.style.display='flex'; fuelBox.style.display='block'; }
+  if(m==='mobile'){ jumpBtn.style.display='flex'; jetpackBtn.style.display='flex'; fuelBox.style.display='block'; }
+}
+
+document.querySelectorAll('.mode').forEach(el=>{
+  el.addEventListener('click',()=>{
+    const m=el.dataset.mode;
+    if(m==='vr'){ if(el.classList.contains('off')){enterVR();return;} startMode('vr'); enterVR(); }
+    else startMode(m);
+  });
+});
+
+resetBtn.addEventListener('click',()=>{
+  player.position.copy(SPAWN); vy=0; facing=0;
+  dolly.position.copy(SPAWN); vrVY=0;
+  fuel=FUEL_START;
+  for(const t of tanks){t.userData.active=true;t.userData.respawn=0;t.visible=true;}
+});
+menuBtn.addEventListener('click',()=>{
+  if(document.pointerLockElement)document.exitPointerLock();
+  mode=null;
+  hud.style.display='none'; resetBtn.style.display='none'; menuBtn.style.display='none';
+  veil.style.display='none'; joy.style.display='none'; jumpBtn.style.display='none'; tag.style.display='none';
+  jetpackBtn.style.display='none'; fuelBox.style.display='none';
+  menu.style.display='flex';
+});
+</script>
