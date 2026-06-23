@@ -1,0 +1,1531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>VECTOR RUSH</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+  :root{
+    --bg-deep: #0a0118;
+    --bg-purple: #1a0a33;
+    --neon-cyan: #00f0ff;
+    --neon-magenta: #ff2e87;
+    --neon-yellow: #ffde2e;
+    --neon-purple: #b829ff;
+    --neon-orange: #ff6b35;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0; overflow: hidden;
+    width: 100%; height: 100%;
+    background: var(--bg-deep);
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--neon-cyan);
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+
+  #game-container { position: fixed; inset: 0; }
+  #game-container canvas { display: block; width: 100%; height: 100%; }
+
+  /* ---------- HUD ---------- */
+  #hud {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between;
+    padding: 18px 26px;
+    pointer-events: none;
+    z-index: 20;
+    font-family: 'Orbitron', sans-serif;
+  }
+  .hud-block { text-align: left; }
+  .hud-block.right { text-align: right; }
+  .hud-label {
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--neon-magenta);
+    text-shadow: 0 0 8px var(--neon-magenta);
+    opacity: 0.9;
+  }
+  .hud-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--neon-cyan);
+    text-shadow: 0 0 6px var(--neon-cyan), 0 0 14px rgba(0,240,255,0.6);
+    letter-spacing: 2px;
+  }
+  .hud-value.small { font-size: 18px; color: var(--neon-yellow); text-shadow: 0 0 6px var(--neon-yellow), 0 0 14px rgba(255,222,46,0.6); }
+  .hud-value.kills { font-size: 28px; color: var(--neon-magenta); text-shadow: 0 0 6px var(--neon-magenta), 0 0 14px rgba(255,46,135,0.6); }
+  .hud-milestone {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 10px; letter-spacing: 2px;
+    color: var(--neon-yellow); text-shadow: 0 0 6px var(--neon-yellow);
+    height: 14px; margin-top: 2px;
+  }
+
+  /* ---------- Laser cooldown bar ---------- */
+  #laser-hud {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    display: none; flex-direction: column; align-items: center; gap: 6px;
+    z-index: 20; pointer-events: none;
+  }
+  #laser-status-label {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px; letter-spacing: 4px;
+    color: var(--neon-magenta);
+    text-shadow: 0 0 8px var(--neon-magenta);
+    transition: color 0.15s, text-shadow 0.15s;
+  }
+  #laser-status-label.ready {
+    color: #00f0ff;
+    text-shadow: 0 0 10px #00f0ff, 0 0 22px rgba(0,240,255,0.7);
+    animation: pulse-ready 0.6s ease-in-out infinite alternate;
+  }
+  @keyframes pulse-ready {
+    from { opacity: 0.75; }
+    to   { opacity: 1.0; }
+  }
+  #laser-track {
+    width: 220px; height: 8px;
+    background: rgba(255,46,135,0.1);
+    border: 1px solid rgba(255,46,135,0.35);
+    border-radius: 4px; overflow: hidden;
+    box-shadow: 0 0 8px rgba(255,46,135,0.15);
+  }
+  #laser-fill {
+    height: 100%; width: 0%;
+    border-radius: 4px;
+    transition: box-shadow 0.1s;
+  }
+
+  /* ---------- Overlays ---------- */
+  .overlay {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 30;
+    background: radial-gradient(ellipse at center, rgba(26,10,51,0.55) 0%, rgba(10,1,24,0.92) 75%);
+    text-align: center;
+    transition: opacity 0.4s ease;
+  }
+  .overlay.hidden { opacity: 0; pointer-events: none; visibility: hidden; }
+
+  .panel {
+    display: flex; flex-direction: column; align-items: center; gap: 18px;
+    padding: 40px 50px;
+    border: 1px solid rgba(0,240,255,0.35);
+    background: rgba(10,1,24,0.6);
+    box-shadow: 0 0 40px rgba(184,41,255,0.25), inset 0 0 60px rgba(0,240,255,0.05);
+    max-width: 90vw;
+  }
+
+  .title {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    font-size: clamp(40px, 10vw, 84px);
+    letter-spacing: 8px;
+    margin: 0;
+    background: linear-gradient(180deg, #fff 0%, var(--neon-cyan) 45%, var(--neon-magenta) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: 0 0 24px rgba(0,240,255,0.5);
+    filter: drop-shadow(0 0 18px rgba(255,46,135,0.45));
+  }
+
+  .subtitle {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 13px;
+    letter-spacing: 4px;
+    color: var(--neon-purple);
+    text-shadow: 0 0 8px var(--neon-purple);
+  }
+
+  .mode-prompt {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 12px; letter-spacing: 5px;
+    color: var(--neon-yellow);
+    text-shadow: 0 0 8px var(--neon-yellow);
+    margin-top: 4px;
+  }
+  .mode-row {
+    display: flex; gap: 18px; flex-wrap: wrap; justify-content: center;
+  }
+  .mode-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    width: 130px; padding: 18px 12px;
+    background: rgba(0,240,255,0.04);
+    border: 1.5px solid rgba(0,240,255,0.4);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-family: 'Orbitron', sans-serif;
+  }
+  .mode-btn:hover, .mode-btn:focus {
+    background: rgba(0,240,255,0.12);
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 22px rgba(0,240,255,0.5), inset 0 0 18px rgba(0,240,255,0.08);
+    transform: translateY(-2px);
+  }
+  .mode-btn:active { transform: translateY(0); }
+  .mode-btn .mode-icon { font-size: 30px; line-height: 1; }
+  .mode-btn .mode-name {
+    font-size: 14px; font-weight: 700; letter-spacing: 2px;
+    color: var(--neon-cyan); text-shadow: 0 0 6px var(--neon-cyan);
+  }
+  .mode-btn .mode-sub {
+    font-size: 9px; letter-spacing: 1.5px;
+    color: var(--neon-magenta); text-shadow: 0 0 5px var(--neon-magenta);
+  }
+  .mode-btn.vr-disabled {
+    opacity: 0.4; cursor: not-allowed;
+    border-color: rgba(120,120,140,0.4);
+  }
+  .mode-btn.vr-disabled:hover {
+    background: rgba(0,240,255,0.04); box-shadow: none; transform: none;
+    border-color: rgba(120,120,140,0.4);
+  }
+  #vr-unsupported {
+    font-size: 11px; letter-spacing: 1px;
+    color: var(--neon-orange);
+    text-shadow: 0 0 6px var(--neon-orange);
+    max-width: 360px;
+  }
+
+  .controls-hint {
+    display: flex; gap: 26px; flex-wrap: wrap; justify-content: center;
+    font-size: 13px;
+    color: var(--neon-cyan);
+    letter-spacing: 1px;
+    opacity: 0.85;
+  }
+  .controls-hint span { white-space: nowrap; }
+  .key {
+    display: inline-block;
+    border: 1px solid var(--neon-cyan);
+    border-radius: 4px;
+    padding: 2px 8px;
+    margin: 0 2px;
+    box-shadow: 0 0 6px rgba(0,240,255,0.5);
+  }
+
+  .neon-btn {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 16px;
+    letter-spacing: 5px;
+    font-weight: 700;
+    background: transparent;
+    color: var(--neon-yellow);
+    border: 2px solid var(--neon-yellow);
+    padding: 14px 38px;
+    cursor: pointer;
+    box-shadow: 0 0 12px rgba(255,222,46,0.4), inset 0 0 12px rgba(255,222,46,0.1);
+    text-shadow: 0 0 8px var(--neon-yellow);
+    transition: all 0.15s ease;
+    margin-top: 6px;
+  }
+  .neon-btn:hover, .neon-btn:focus {
+    background: rgba(255,222,46,0.12);
+    box-shadow: 0 0 24px rgba(255,222,46,0.7), inset 0 0 18px rgba(255,222,46,0.2);
+    transform: translateY(-1px);
+  }
+  .neon-btn:active { transform: translateY(1px); }
+
+  .gameover-title {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    font-size: clamp(34px, 8vw, 60px);
+    letter-spacing: 6px;
+    color: var(--neon-magenta);
+    text-shadow: 0 0 18px var(--neon-magenta), 0 0 40px rgba(255,46,135,0.5);
+    margin: 0;
+  }
+
+  .stat-row { display: flex; gap: 40px; }
+  .stat { text-align: center; }
+  .stat-label {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px; letter-spacing: 3px;
+    color: var(--neon-purple);
+    text-shadow: 0 0 6px var(--neon-purple);
+  }
+  .stat-value {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 36px; font-weight: 700;
+    color: var(--neon-cyan);
+    text-shadow: 0 0 10px var(--neon-cyan);
+  }
+  .new-best {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 12px; letter-spacing: 3px;
+    color: var(--neon-yellow);
+    text-shadow: 0 0 8px var(--neon-yellow);
+    height: 16px;
+  }
+
+  /* ---------- CRT scanlines & vignette ---------- */
+  #scanlines {
+    position: fixed; inset: 0; z-index: 40; pointer-events: none;
+    background: repeating-linear-gradient(to bottom, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 3px);
+    mix-blend-mode: overlay;
+  }
+  #vignette {
+    position: fixed; inset: 0; z-index: 41; pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.55) 100%);
+  }
+  #flash {
+    position: fixed; inset: 0; z-index: 45; pointer-events: none;
+    background: #fff; opacity: 0;
+  }
+
+  /* ---------- Touch controls ---------- */
+  #touch-controls {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 25;
+    display: none;
+    justify-content: space-between;
+    padding: 22px;
+    pointer-events: none;
+  }
+  .touch-pad {
+    display: grid;
+    grid-template-columns: 56px 56px 56px;
+    grid-template-rows: 56px 56px 56px;
+    gap: 6px;
+    pointer-events: auto;
+  }
+  .touch-btn {
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid rgba(0,240,255,0.45);
+    background: rgba(0,240,255,0.06);
+    color: var(--neon-cyan);
+    font-size: 22px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0,240,255,0.2);
+  }
+  .touch-btn:active { background: rgba(0,240,255,0.25); }
+</style>
+</head>
+<body>
+
+<div id="game-container"></div>
+
+<div id="hud" style="display:none;">
+  <div class="hud-block">
+    <div class="hud-label">TIME SURVIVED</div>
+    <div class="hud-value" id="score-display">00.0</div>
+  </div>
+  <div class="hud-block" style="text-align:center;">
+    <div class="hud-label">KILLS</div>
+    <div class="hud-value kills" id="kills-display">0</div>
+    <div class="hud-milestone" id="milestone-display"></div>
+  </div>
+  <div class="hud-block right">
+    <div class="hud-label">VELOCITY</div>
+    <div class="hud-value small" id="speed-display">x1.0</div>
+  </div>
+</div>
+
+<div id="laser-hud">
+  <div id="laser-status-label">LASER COOLING</div>
+  <div id="laser-track"><div id="laser-fill"></div></div>
+</div>
+
+<div id="start-screen" class="overlay">
+  <div class="panel">
+    <h1 class="title">VECTOR RUSH</h1>
+    <div class="subtitle">// ENDLESS POLYGON FIELD //</div>
+    <div class="mode-prompt">SELECT YOUR PLATFORM</div>
+    <div class="mode-row">
+      <button class="mode-btn" id="mode-desktop">
+        <span class="mode-icon">&#9000;</span>
+        <span class="mode-name">DESKTOP</span>
+        <span class="mode-sub">ARROWS · SPACE</span>
+      </button>
+      <button class="mode-btn" id="mode-phone">
+        <span class="mode-icon">&#128241;</span>
+        <span class="mode-name">PHONE</span>
+        <span class="mode-sub">TOUCH PAD</span>
+      </button>
+      <button class="mode-btn" id="mode-vr">
+        <span class="mode-icon">&#129488;</span>
+        <span class="mode-name">VR HEADSET</span>
+        <span class="mode-sub">QUEST · WEBXR</span>
+      </button>
+    </div>
+    <div class="controls-hint" id="controls-hint-desktop">
+      <span><span class="key">&#8593;</span><span class="key">&#8595;</span><span class="key">&#8592;</span><span class="key">&#8594;</span> STEER</span>
+      <span><span class="key">SPACE</span> SHOOT</span>
+      <span>AVOID THE SHAPES · 5 KILLS = -0.1x SPEED</span>
+    </div>
+    <div id="vr-unsupported" style="display:none;"></div>
+  </div>
+</div>
+
+<div id="gameover-screen" class="overlay hidden">
+  <div class="panel">
+    <h2 class="gameover-title">SIGNAL LOST</h2>
+    <div class="stat-row">
+      <div class="stat">
+        <div class="stat-label">TIME</div>
+        <div class="stat-value" id="final-score">00.0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">KILLS</div>
+        <div class="stat-value" id="final-kills">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">BEST</div>
+        <div class="stat-value" id="best-score">00.0</div>
+      </div>
+    </div>
+    <div class="new-best" id="new-best-label"></div>
+    <button class="neon-btn" id="restart-btn">RETRY</button>
+  </div>
+</div>
+
+<div id="scanlines"></div>
+<div id="vignette"></div>
+<div id="flash"></div>
+
+<div id="touch-controls">
+  <div class="touch-pad" style="grid-template-areas:
+      '. up .'
+      'left . right'
+      '. down .'; ">
+    <div></div>
+    <div class="touch-btn" data-key="up" style="grid-area:up;">&#8593;</div>
+    <div></div>
+    <div class="touch-btn" data-key="left" style="grid-area:left;">&#8592;</div>
+    <div></div>
+    <div class="touch-btn" data-key="right" style="grid-area:right;">&#8594;</div>
+    <div></div>
+    <div class="touch-btn" data-key="down" style="grid-area:down;">&#8595;</div>
+    <div></div>
+  </div>
+  <div style="display:flex;align-items:center;pointer-events:auto;">
+    <div class="touch-btn" id="touch-fire-btn" style="width:80px;height:80px;font-size:15px;letter-spacing:1px;font-family:'Orbitron',sans-serif;border-color:rgba(255,46,135,0.7);background:rgba(255,46,135,0.08);color:#ff2e87;box-shadow:0 0 14px rgba(255,46,135,0.3);">FIRE</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+  // ============================================================
+  //  SETUP
+  // ============================================================
+  const container = document.getElementById('game-container');
+  const scene = new THREE.Scene();
+
+  const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera.position.set(0, 3, 8);
+
+  // camera rig — in VR the headset drives the camera pose, so we move this group
+  // to position the player in the world instead of moving the camera directly.
+  const cameraRig = new THREE.Group();
+  cameraRig.add(camera);
+  scene.add(cameraRig);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.xr.enabled = true;
+  container.appendChild(renderer.domElement);
+
+  scene.fog = new THREE.FogExp2(0x0a0118, 0.013);
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // ============================================================
+  //  BACKGROUND GRADIENT
+  // ============================================================
+  function createSkyTexture(){
+    const c = document.createElement('canvas');
+    c.width = 4; c.height = 256;
+    const ctx = c.getContext('2d');
+    const grad = ctx.createLinearGradient(0,0,0,256);
+    grad.addColorStop(0, '#05010f');
+    grad.addColorStop(0.45, '#1a0a33');
+    grad.addColorStop(0.72, '#5b1d6e');
+    grad.addColorStop(0.85, '#ff6b6b');
+    grad.addColorStop(1, '#ffde2e');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,4,256);
+    const tex = new THREE.CanvasTexture(c);
+    return tex;
+  }
+  scene.background = createSkyTexture();
+
+  // ============================================================
+  //  LIGHTS
+  // ============================================================
+  scene.add(new THREE.AmbientLight(0x4a4070, 1.4));
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.35);
+  dirLight.position.set(0, 10, 5);
+  scene.add(dirLight);
+
+  // ============================================================
+  //  SUN
+  // ============================================================
+  function createSunTexture(){
+    const size = 512;
+    const c = document.createElement('canvas');
+    c.width = size; c.height = size;
+    const ctx = c.getContext('2d');
+    const cx = size/2, cy = size/2, r = size/2 - 4;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI*2);
+    ctx.closePath();
+    ctx.clip();
+
+    const grad = ctx.createLinearGradient(0, cy - r, 0, cy + r);
+    grad.addColorStop(0,    '#f0d8a0');
+    grad.addColorStop(0.22, '#e0a85a');
+    grad.addColorStop(0.5,  '#d97f5a');
+    grad.addColorStop(0.78, '#c2447a');
+    grad.addColorStop(1,    '#8a2bb0');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+
+    // retro horizontal slices through the lower half
+    ctx.fillStyle = '#170a2e';
+    let y = cy + r * 0.04;
+    let h = 3;
+    let gap = 7;
+    while (y < cy + r) {
+      ctx.fillRect(0, y, size, h);
+      y += h + gap;
+      h += 1.4;
+      gap += 1.6;
+    }
+    ctx.restore();
+
+    return new THREE.CanvasTexture(c);
+  }
+  const sunMat = new THREE.MeshBasicMaterial({ map: createSunTexture(), transparent: true, opacity: 0.8, depthWrite: false, fog: false });
+  const sun = new THREE.Mesh(new THREE.CircleGeometry(34, 64), sunMat);
+  sun.position.set(0, 17, -345);
+  scene.add(sun);
+
+  // soft halo glow behind the sun
+  const haloMat = new THREE.SpriteMaterial({
+    map: createGlowTexture(), color: 0xff9f5a, transparent: true,
+    blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.22, fog: false
+  });
+  const halo = new THREE.Sprite(haloMat);
+  halo.scale.set(110, 110, 1);
+  halo.position.set(0, 17, -346);
+  scene.add(halo);
+
+  // ============================================================
+  //  STARS
+  // ============================================================
+  (function addStars(){
+    const count = 600;
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      positions[i*3]   = (Math.random() - 0.5) * 400;
+      positions[i*3+1] = Math.random() * 90 + 8;
+      positions[i*3+2] = -100 - Math.random() * 280;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 1.4, transparent: true, opacity: 0.8, depthWrite: false, fog: false });
+    scene.add(new THREE.Points(geo, mat));
+  })();
+
+  // ============================================================
+  //  MOUNTAINS (low-poly silhouettes)
+  // ============================================================
+  function createMountainRange(zPos, baseHeight, baseColor, peakColor, edgeColor, opacity){
+    const points = [];
+    let x = -160;
+    while (x <= 160) {
+      points.push({ x: x, h: baseHeight + Math.random() * baseHeight * 1.1 });
+      x += 5 + Math.random() * 9;
+    }
+    const positions = [];
+    const colors = [];
+    const indices = [];
+    const bottom = -16;
+    const bc = new THREE.Color(baseColor);
+    const pc = new THREE.Color(peakColor);
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[i], p1 = points[i+1];
+      const idx = positions.length / 3;
+      positions.push(p0.x, bottom, zPos);
+      positions.push(p0.x, p0.h, zPos);
+      positions.push(p1.x, bottom, zPos);
+      positions.push(p1.x, p1.h, zPos);
+      colors.push(bc.r, bc.g, bc.b);
+      colors.push(pc.r, pc.g, pc.b);
+      colors.push(bc.r, bc.g, bc.b);
+      colors.push(pc.r, pc.g, pc.b);
+      indices.push(idx, idx+1, idx+2,  idx+1, idx+3, idx+2);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3));
+    geo.setIndex(indices);
+    const mat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity, depthWrite: true, fog: false });
+    scene.add(new THREE.Mesh(geo, mat));
+
+    // ridge glow line
+    const ridgePositions = [];
+    for (const p of points) ridgePositions.push(p.x, p.h, zPos);
+    const ridgeGeo = new THREE.BufferGeometry();
+    ridgeGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(ridgePositions), 3));
+    const ridgeMat = new THREE.LineBasicMaterial({ color: edgeColor, transparent: true, opacity: Math.min(1, opacity + 0.2), fog: false });
+    scene.add(new THREE.Line(ridgeGeo, ridgeMat));
+  }
+  createMountainRange(-300, 11, 0x140826, 0x4a1f7a, 0xb829ff, 0.95);
+  createMountainRange(-225, 8, 0x1f0d3a, 0xff4d8f, 0xff2e87, 1.0);
+
+  // ============================================================
+  //  GRID FLOOR
+  // ============================================================
+  const GRID_SIZE = 400;
+  const GRID_DIVS = 80;
+  const GRID_CELL = GRID_SIZE / GRID_DIVS;
+  const grid = new THREE.GridHelper(GRID_SIZE, GRID_DIVS, 0xff2e87, 0x6e2bff);
+  grid.position.y = -1;
+  grid.material.transparent = true;
+  grid.material.opacity = 0.55;
+  scene.add(grid);
+
+  // a soft glow plane under the grid
+  const floorGlowMat = new THREE.MeshBasicMaterial({ color: 0x2a0a4e, transparent: true, opacity: 0.35 });
+  const floorGlow = new THREE.Mesh(new THREE.PlaneGeometry(GRID_SIZE, GRID_SIZE), floorGlowMat);
+  floorGlow.rotation.x = -Math.PI/2;
+  floorGlow.position.y = -1.05;
+  scene.add(floorGlow);
+
+  // ============================================================
+  //  PLAYER SHIP
+  // ============================================================
+  const ship = new THREE.Group();
+
+  const coreGeo = new THREE.IcosahedronGeometry(0.6, 1);
+  const coreMat = new THREE.MeshPhongMaterial({
+    color: 0x0a3a44, emissive: 0x00f0ff, emissiveIntensity: 0.9, shininess: 90, specular: 0xffffff
+  });
+  ship.add(new THREE.Mesh(coreGeo, coreMat));
+
+  const wireGeo = new THREE.IcosahedronGeometry(0.82, 1);
+  const wireMat = new THREE.MeshBasicMaterial({ color: 0xb829ff, wireframe: true, transparent: true, opacity: 0.55 });
+  ship.add(new THREE.Mesh(wireGeo, wireMat));
+
+  const shipLight = new THREE.PointLight(0x00f0ff, 2.2, 14);
+  ship.add(shipLight);
+
+  function createGlowTexture(){
+    const size = 128;
+    const c = document.createElement('canvas');
+    c.width = size; c.height = size;
+    const ctx = c.getContext('2d');
+    const grad = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+    grad.addColorStop(0, 'rgba(255,255,255,0.9)');
+    grad.addColorStop(0.4, 'rgba(0,240,255,0.4)');
+    grad.addColorStop(1, 'rgba(0,240,255,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,size,size);
+    return new THREE.CanvasTexture(c);
+  }
+  const glowSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: createGlowTexture(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+  }));
+  glowSprite.scale.set(4.5, 4.5, 1);
+  ship.add(glowSprite);
+
+  // trail
+  const TRAIL_LEN = 14;
+  const trailPositions = new Float32Array(TRAIL_LEN * 3);
+  const trailGeo = new THREE.BufferGeometry();
+  trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+  const trailMat = new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.35 });
+  const trailLine = new THREE.Line(trailGeo, trailMat);
+  scene.add(trailLine);
+  const trailHistory = [];
+
+  scene.add(ship);
+
+  const SHIP_RADIUS = 0.62;
+  const BOUNDS = { xMin: -7.5, xMax: 7.5, yMin: 0.4, yMax: 6.5 };
+  const playerPos = new THREE.Vector3(0, 2.2, 0);
+  ship.position.copy(playerPos);
+
+  // ============================================================
+  //  OBSTACLES
+  // ============================================================
+  const obstacleGeoms = [
+    new THREE.TetrahedronGeometry(1.3),
+    new THREE.OctahedronGeometry(1.15),
+    new THREE.IcosahedronGeometry(1.05, 0),
+    new THREE.BoxGeometry(1.5, 1.5, 1.5),
+    new THREE.ConeGeometry(1.05, 2.0, 5),
+    new THREE.DodecahedronGeometry(0.95)
+  ];
+  const obstacleRadii = [1.3, 1.15, 1.05, 1.3, 1.2, 1.05];
+  const obstacleColors = [0xff2e87, 0xffde2e, 0x00f0ff, 0xb829ff, 0xff6b35];
+
+  function resetObstacle(group, initial){
+    const scale = 0.8 + Math.random() * 0.9;
+    group.scale.setScalar(scale);
+    group.userData.scaledRadius = group.userData.baseRadius * scale;
+    group.position.x = (Math.random() - 0.5) * 17;
+    group.position.y = 0.6 + Math.random() * 6.2;
+    group.position.z = initial ? -40 - Math.random() * 220 : -210 - Math.random() * 50;
+    group.rotation.set(Math.random()*Math.PI*2, Math.random()*Math.PI*2, Math.random()*Math.PI*2);
+  }
+
+  function createObstacle(){
+    const group = new THREE.Group();
+    const idx = Math.floor(Math.random() * obstacleGeoms.length);
+    const color = obstacleColors[Math.floor(Math.random() * obstacleColors.length)];
+
+    const fillMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.12, side: THREE.DoubleSide });
+    group.add(new THREE.Mesh(obstacleGeoms[idx], fillMat));
+
+    const edges = new THREE.EdgesGeometry(obstacleGeoms[idx]);
+    const lineMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.95 });
+    group.add(new THREE.LineSegments(edges, lineMat));
+
+    group.userData = {
+      baseRadius: obstacleRadii[idx],
+      rotSpeed: {
+        x: (Math.random() - 0.5) * 1.4,
+        y: (Math.random() - 0.5) * 1.4,
+        z: (Math.random() - 0.5) * 1.4
+      }
+    };
+    resetObstacle(group, true);
+    scene.add(group);
+    return group;
+  }
+
+  const OBSTACLE_COUNT = 18;
+  const obstacles = [];
+  for (let i = 0; i < OBSTACLE_COUNT; i++) obstacles.push(createObstacle());
+
+  // ============================================================
+  //  EXPLOSION PARTICLES
+  // ============================================================
+  const PARTICLE_COUNT = 160;
+  const particleGeo = new THREE.BufferGeometry();
+  const particlePos = new Float32Array(PARTICLE_COUNT * 3);
+  particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePos, 3));
+  const particleMat = new THREE.PointsMaterial({
+    color: 0x00f0ff, size: 0.18, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  const particles = new THREE.Points(particleGeo, particleMat);
+  scene.add(particles);
+  let particleVelocities = [];
+  let particleLife = 0;
+
+  function triggerExplosion(pos){
+    particleVelocities = [];
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      particlePos[i*3]   = pos.x;
+      particlePos[i*3+1] = pos.y;
+      particlePos[i*3+2] = pos.z;
+      const speed = 2 + Math.random() * 7;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.random() * Math.PI;
+      particleVelocities.push(
+        Math.sin(phi) * Math.cos(theta) * speed,
+        Math.cos(phi) * speed,
+        Math.sin(phi) * Math.sin(theta) * speed
+      );
+    }
+    particleGeo.attributes.position.needsUpdate = true;
+    particleMat.opacity = 1;
+    particleMat.color.setHex([0x00f0ff, 0xffde2e, 0xff2e87][Math.floor(Math.random()*3)]);
+    particleLife = 1.0;
+  }
+
+  // ============================================================
+  //  INPUT
+  // ============================================================
+  const keys = { up: false, down: false, left: false, right: false };
+  const keyMap = {
+    ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+    w: 'up', s: 'down', a: 'left', d: 'right'
+  };
+
+  window.addEventListener('keydown', (e) => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = true; e.preventDefault(); }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (state === 'start') startGame();
+      else if (state === 'gameover') startGame();
+    }
+    if (e.key === ' ') {
+      e.preventDefault();
+      if (state === 'playing') tryShoot();
+      else if (state === 'start') startGame();
+      else if (state === 'gameover') startGame();
+    }
+  });
+  window.addEventListener('keyup', (e) => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = false; e.preventDefault(); }
+  });
+
+  // touch controls
+  document.querySelectorAll('.touch-btn').forEach(btn => {
+    const k = btn.dataset.key;
+    if (!k) return;
+    const set = (v) => (e) => { e.preventDefault(); keys[k] = v; };
+    btn.addEventListener('touchstart', set(true), { passive: false });
+    btn.addEventListener('touchend', set(false), { passive: false });
+    btn.addEventListener('touchcancel', set(false), { passive: false });
+    btn.addEventListener('mousedown', set(true));
+    btn.addEventListener('mouseup', set(false));
+    btn.addEventListener('mouseleave', set(false));
+  });
+
+  // touch fire button
+  const touchFireBtn = document.getElementById('touch-fire-btn');
+  touchFireBtn.addEventListener('touchstart', (e) => { e.preventDefault(); tryShoot(); }, { passive: false });
+  touchFireBtn.addEventListener('mousedown', (e) => { tryShoot(); });
+
+  // ============================================================
+  //  VR / WEBXR SETUP
+  // ============================================================
+  let vrController1 = null; // grip / left
+  let vrController2 = null; // right (trigger to fire)
+  let rightTriggerWasPressed = false;
+  const vrInput = { x: 0, y: 0 }; // left joystick axes (-1..1)
+
+  // head-gaze reticle: a glowing ring the player aims with their head
+  const reticleGroup = new THREE.Group();
+  (function buildReticle(){
+    const ringGeo = new THREE.RingGeometry(0.45, 0.6, 32);
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.85, fog: false, side: THREE.DoubleSide });
+    reticleGroup.add(new THREE.Mesh(ringGeo, ringMat));
+    const dotGeo = new THREE.CircleGeometry(0.07, 16);
+    const dotMat = new THREE.MeshBasicMaterial({ color: 0xff2e87, transparent: true, opacity: 0.9, fog: false, side: THREE.DoubleSide });
+    reticleGroup.add(new THREE.Mesh(dotGeo, dotMat));
+    // four tick marks
+    const tickMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.7, fog: false, side: THREE.DoubleSide });
+    for (let i = 0; i < 4; i++){
+      const tick = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.22), tickMat);
+      const a = i * Math.PI / 2;
+      tick.position.set(Math.cos(a) * 0.85, Math.sin(a) * 0.85, 0);
+      tick.rotation.z = a;
+      reticleGroup.add(tick);
+    }
+  })();
+  reticleGroup.visible = false;
+  scene.add(reticleGroup);
+
+  // world-space VR panel (shown on game over inside the headset)
+  function makeTextPanel(lines){
+    const c = document.createElement('canvas');
+    c.width = 1024; c.height = 512;
+    const ctx = c.getContext('2d');
+    return { canvas: c, ctx, texture: new THREE.CanvasTexture(c) };
+  }
+  const vrPanel = (function(){
+    const { canvas, ctx, texture } = makeTextPanel();
+    const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, fog: false, side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(12, 6), mat);
+    mesh.visible = false;
+    scene.add(mesh);
+    function draw(title, sub1, sub2){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle = 'rgba(10,1,24,0.82)';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.strokeStyle = '#ff2e87'; ctx.lineWidth = 6;
+      ctx.strokeRect(10,10,canvas.width-20,canvas.height-20);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ff2e87';
+      ctx.font = 'bold 96px Orbitron, sans-serif';
+      ctx.fillText(title, canvas.width/2, 180);
+      ctx.fillStyle = '#00f0ff';
+      ctx.font = 'bold 56px Orbitron, sans-serif';
+      ctx.fillText(sub1, canvas.width/2, 300);
+      ctx.fillStyle = '#ffde2e';
+      ctx.font = '44px "Share Tech Mono", monospace';
+      ctx.fillText(sub2, canvas.width/2, 400);
+      texture.needsUpdate = true;
+    }
+    return { mesh, draw };
+  })();
+
+  function showVRPanel(title, sub1, sub2){
+    vrPanel.draw(title, sub1, sub2);
+    // place panel ahead of the head
+    const headPos = new THREE.Vector3();
+    const headDir = new THREE.Vector3();
+    camera.getWorldPosition(headPos);
+    camera.getWorldDirection(headDir);
+    vrPanel.mesh.position.copy(headPos).addScaledVector(headDir, 16);
+    vrPanel.mesh.lookAt(headPos);
+    vrPanel.mesh.visible = true;
+  }
+  function hideVRPanel(){ vrPanel.mesh.visible = false; }
+
+  function setupVRControllers(){
+    if (vrController1) return; // already set up
+    vrController1 = renderer.xr.getController(0);
+    vrController2 = renderer.xr.getController(1);
+    scene.add(vrController1);
+    scene.add(vrController2);
+
+    // 'select' (trigger) on either controller fires, or restarts after game over
+    const onSelect = () => {
+      if (gameMode !== 'vr') return;
+      if (state === 'playing') tryShoot();
+      else if (state === 'gameover') startGame();
+    };
+    vrController1.addEventListener('selectstart', onSelect);
+    vrController2.addEventListener('selectstart', onSelect);
+  }
+
+  // Poll gamepad axes/buttons each frame while in an XR session
+  function pollVRInput(){
+    const session = renderer.xr.getSession();
+    if (!session) return;
+    vrInput.x = 0; vrInput.y = 0;
+    let rightTriggerPressed = false;
+
+    for (const source of session.inputSources) {
+      if (!source.gamepad) continue;
+      const gp = source.gamepad;
+      const hand = source.handedness; // 'left' | 'right' | 'none'
+      const axes = gp.axes;
+      // Quest thumbstick is usually axes[2],axes[3]; fall back to [0],[1]
+      const ax = axes.length >= 4 ? axes[2] : (axes[0] || 0);
+      const ay = axes.length >= 4 ? axes[3] : (axes[1] || 0);
+
+      if (hand === 'left') {
+        vrInput.x = ax;
+        vrInput.y = ay;
+      }
+      if (hand === 'right') {
+        // trigger is button 0
+        if (gp.buttons[0] && gp.buttons[0].pressed) rightTriggerPressed = true;
+      }
+      // if no handedness info, let either stick drive movement
+      if (hand === 'none' && vrInput.x === 0 && vrInput.y === 0) {
+        vrInput.x = ax; vrInput.y = ay;
+      }
+    }
+
+    // edge-trigger the right-hand trigger as a shot (in addition to 'selectstart')
+    if (rightTriggerPressed && !rightTriggerWasPressed && state === 'playing') {
+      tryShoot();
+    }
+    rightTriggerWasPressed = rightTriggerPressed;
+  }
+
+  // ============================================================
+  //  PLATFORM MODE SELECTION
+  // ============================================================
+  const controlsHintDesktop = document.getElementById('controls-hint-desktop');
+  const vrUnsupportedEl = document.getElementById('vr-unsupported');
+  const modeVrBtn = document.getElementById('mode-vr');
+
+  document.getElementById('mode-desktop').addEventListener('click', () => { gameMode = 'desktop'; startGame(); });
+  document.getElementById('mode-phone').addEventListener('click', () => { gameMode = 'phone'; startGame(); });
+
+  // Probe WebXR support and wire the VR button accordingly
+  if (navigator.xr && navigator.xr.isSessionSupported) {
+    navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
+      if (!supported) disableVrButton('No VR headset detected. Open this page in your Quest browser to play in VR.');
+    }).catch(() => disableVrButton('VR could not be initialised on this device.'));
+  } else {
+    disableVrButton('This browser does not support WebXR. Open in the Quest browser for VR.');
+  }
+
+  function disableVrButton(msg){
+    modeVrBtn.classList.add('vr-disabled');
+    modeVrBtn.disabled = true;
+    vrUnsupportedEl.style.display = 'block';
+    vrUnsupportedEl.textContent = msg;
+  }
+
+  modeVrBtn.addEventListener('click', () => {
+    if (modeVrBtn.disabled) return;
+    gameMode = 'vr';
+    setupVRControllers();
+    // request the immersive session, then start the game once it begins
+    const sessionInit = { optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking'] };
+    navigator.xr.requestSession('immersive-vr', sessionInit).then((session) => {
+      renderer.xr.setReferenceSpaceType('local');
+      renderer.xr.setSession(session).then(() => {
+        startGame();
+      });
+      session.addEventListener('end', () => {
+        // returning from VR — show start screen again
+        state = 'start';
+        reticleGroup.visible = false;
+        hud.style.display = 'none';
+        laserHud.style.display = 'none';
+        startScreen.classList.remove('hidden');
+        gameoverScreen.classList.add('hidden');
+      });
+    }).catch((err) => {
+      disableVrButton('Could not start VR session: ' + (err && err.message ? err.message : err));
+    });
+  });
+
+  // ============================================================
+  //  UI ELEMENTS
+  // ============================================================
+  const hud = document.getElementById('hud');
+  const scoreDisplay = document.getElementById('score-display');
+  const speedDisplay = document.getElementById('speed-display');
+  const killsDisplay = document.getElementById('kills-display');
+  const milestoneDisplay = document.getElementById('milestone-display');
+  const laserFill = document.getElementById('laser-fill');
+  const laserStatusLabel = document.getElementById('laser-status-label');
+  const laserHud = document.getElementById('laser-hud');
+  const startScreen = document.getElementById('start-screen');
+  const gameoverScreen = document.getElementById('gameover-screen');
+  const finalScoreEl = document.getElementById('final-score');
+  const finalKillsEl = document.getElementById('final-kills');
+  const bestScoreEl = document.getElementById('best-score');
+  const newBestLabel = document.getElementById('new-best-label');
+  const flashEl = document.getElementById('flash');
+
+  document.getElementById('restart-btn').addEventListener('click', () => startGame());
+
+  // ============================================================
+  //  GAME STATE
+  // ============================================================
+  let state = 'start'; // 'start' | 'playing' | 'gameover'
+  let gameMode = 'desktop'; // 'desktop' | 'phone' | 'vr'
+  let elapsed = 0;
+  let distanceTraveled = 0;
+  let bestTime = 0;
+
+  const BASE_SPEED = 16;
+  const MAX_SPEED = 90;
+  const ACCEL = 0.5333; // -> 2.0x by ~30s
+  const MOVE_SPEED = 9.5;
+  const VR_SPEED_FACTOR = 0.92; // close to desktop, slight reduction for comfort
+
+  // ============================================================
+  //  LASER SYSTEM
+  // ============================================================
+  const SHOT_COOLDOWN = 1.0;
+  let lastShotTime = -999;
+  let currentSpeed = BASE_SPEED;
+  let destroyedCount = 0;
+  const activeLasers = [];
+  const impactFlashes = [];
+
+  // cache glow texture for laser use
+  const _sharedGlowTex = createGlowTexture();
+
+  function tryShoot(){
+    if (state !== 'playing') return;
+    if (elapsed - lastShotTime < SHOT_COOLDOWN) return;
+    lastShotTime = elapsed;
+    spawnLaser();
+  }
+
+  // laser level colours: magenta → orange → yellow → cyan → white
+  const LASER_COLORS = [0xff2e87, 0xff6b35, 0xffde2e, 0x00f0ff, 0xffffff];
+
+  function getLaserLevel(){ return Math.floor(destroyedCount / 10) + 1; }
+
+  function spawnLaser(){
+    const level  = getLaserLevel();
+    const color  = LASER_COLORS[Math.min(level - 1, LASER_COLORS.length - 1)];
+    const girth  = 0.055 * level;   // cylinder radius scales with level
+    const length = 3.8;
+
+    // bolt body - cylinder aligned to Z axis
+    const boltGeo = new THREE.CylinderGeometry(girth, girth, length, 8);
+    boltGeo.rotateX(Math.PI / 2);
+    const boltMat = new THREE.MeshBasicMaterial({ color, fog: false });
+    const bolt = new THREE.Mesh(boltGeo, boltMat);
+
+    // bright core line for crispness
+    const lineGeo = new THREE.BufferGeometry();
+    lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0,0,0, 0,0,-4.5]), 3));
+    const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff, fog: false, transparent: true, opacity: 0.8 });
+    const line = new THREE.Line(lineGeo, lineMat);
+
+    // glow sprite at tip — scales with level
+    const glowMat = new THREE.SpriteMaterial({
+      map: _sharedGlowTex, color, transparent: true,
+      blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.85, fog: false
+    });
+    const glowSpr = new THREE.Sprite(glowMat);
+    const glowSize = 2.0 * level;
+    glowSpr.scale.set(glowSize, glowSize, 1);
+    glowSpr.position.z = -length / 2;
+
+    // ambient body glow (wider, softer) — also scales
+    const bodyGlowMat = new THREE.SpriteMaterial({
+      map: _sharedGlowTex, color, transparent: true,
+      blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.3, fog: false
+    });
+    const bodyGlow = new THREE.Sprite(bodyGlowMat);
+    bodyGlow.scale.set(glowSize * 1.6, glowSize * 0.5, 1);
+
+    const group = new THREE.Group();
+    group.add(bolt);
+    group.add(line);
+    group.add(glowSpr);
+    group.add(bodyGlow);
+    group.position.copy(ship.position);
+
+    // direction of travel: straight ahead (-Z) by default, or toward the
+    // head-gaze reticle in VR mode.
+    const dir = new THREE.Vector3(0, 0, -1);
+    if (gameMode === 'vr' && reticleGroup.visible) {
+      dir.copy(reticleGroup.position).sub(ship.position).normalize();
+    }
+    // nudge the start point a bit along the firing direction
+    group.position.addScaledVector(dir, 1.2);
+    // orient the bolt to point along dir
+    group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), dir);
+    scene.add(group);
+
+    // collision radius scales with level
+    const radius = 0.15 * level;
+    const velocity = dir.clone().multiplyScalar(currentSpeed * 2);
+    activeLasers.push({ group, velocity, speed: currentSpeed * 2, alive: true, radius, color });
+  }
+
+  function removeLaser(laser){
+    if (!laser.alive) return;
+    laser.alive = false;
+    scene.remove(laser.group);
+  }
+
+  function triggerImpact(pos, color){
+    color = color || 0xff2e87;
+
+    // --- central glow flash ---
+    const spriteMat = new THREE.SpriteMaterial({
+      map: _sharedGlowTex, color, transparent: true,
+      blending: THREE.AdditiveBlending, depthWrite: false, opacity: 1.0, fog: false
+    });
+    const sprite = new THREE.Sprite(spriteMat);
+    sprite.scale.set(4, 4, 1);
+    sprite.position.copy(pos);
+    scene.add(sprite);
+
+    // --- point light burst ---
+    const light = new THREE.PointLight(color, 5, 18);
+    light.position.copy(pos);
+    scene.add(light);
+
+    // --- shockwave ring (flat torus that expands) ---
+    const ringGeo = new THREE.TorusGeometry(0.1, 0.04, 6, 18);
+    const ringMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, fog: false });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.position.copy(pos);
+    // face the camera roughly
+    ring.rotation.x = Math.PI / 2;
+    scene.add(ring);
+
+    // --- debris shards (tiny tetrahedra flying outward) ---
+    const SHARD_COUNT = 10;
+    const shards = [];
+    for (let i = 0; i < SHARD_COUNT; i++) {
+      const size = 0.08 + Math.random() * 0.18;
+      const geo = new THREE.TetrahedronGeometry(size, 0);
+      const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1.0, fog: false, wireframe: Math.random() > 0.5 });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.copy(pos);
+      mesh.rotation.set(Math.random()*Math.PI*2, Math.random()*Math.PI*2, Math.random()*Math.PI*2);
+      scene.add(mesh);
+
+      const speed = 3.5 + Math.random() * 7;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = (Math.random() - 0.5) * Math.PI;
+      const vx = Math.cos(phi) * Math.cos(theta) * speed;
+      const vy = Math.cos(phi) * Math.sin(theta) * speed;
+      const vz = Math.sin(phi) * speed;
+      const spin = { x: (Math.random()-0.5)*14, y: (Math.random()-0.5)*14, z: (Math.random()-0.5)*14 };
+      shards.push({ mesh, vx, vy, vz, spin });
+    }
+
+    // --- wire-frame shard lines (edge streaks) ---
+    const STREAK_COUNT = 7;
+    const streaks = [];
+    for (let i = 0; i < STREAK_COUNT; i++) {
+      const len = 0.4 + Math.random() * 0.8;
+      const sGeo = new THREE.BufferGeometry();
+      sGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0,0,0, 0,0,-len]), 3));
+      const sMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 1.0, fog: false });
+      const line = new THREE.Line(sGeo, sMat);
+      line.position.copy(pos);
+      const spd = 5 + Math.random() * 9;
+      const th = Math.random() * Math.PI * 2;
+      const ph = (Math.random() - 0.5) * Math.PI;
+      streaks.push({
+        line,
+        vx: Math.cos(ph)*Math.cos(th)*spd,
+        vy: Math.cos(ph)*Math.sin(th)*spd,
+        vz: Math.sin(ph)*spd
+      });
+      scene.add(line);
+    }
+
+    impactFlashes.push({ sprite, light, ring, shards, streaks, life: 1.0 });
+  }
+
+  function startGame(){
+    state = 'playing';
+    elapsed = 0;
+    distanceTraveled = 0;
+    destroyedCount = 0;
+    lastShotTime = -999;
+
+    // clear active lasers
+    for (const laser of activeLasers) scene.remove(laser.group);
+    activeLasers.length = 0;
+    // clear impact flashes
+    for (const f of impactFlashes) {
+      scene.remove(f.sprite); scene.remove(f.light); scene.remove(f.ring);
+      for (const s of f.shards) scene.remove(s.mesh);
+      for (const s of f.streaks) scene.remove(s.line);
+    }
+    impactFlashes.length = 0;
+
+    playerPos.set(0, 2.2, 0);
+    ship.position.copy(playerPos);
+    ship.rotation.set(0,0,0);
+    ship.visible = true;
+    glowSprite.visible = true;
+    // Smaller sphere in VR so it occludes less of the forward view.
+    ship.scale.setScalar(gameMode === 'vr' ? 0.62 : 1);
+    trailHistory.length = 0;
+
+    for (const ob of obstacles) resetObstacle(ob, true);
+
+    particleMat.opacity = 0;
+    particleLife = 0;
+
+    startScreen.classList.add('hidden');
+    gameoverScreen.classList.add('hidden');
+
+    const inVR = (gameMode === 'vr');
+    // In VR the 2D DOM HUD/overlays aren't visible inside the headset, so hide them.
+    hud.style.display = inVR ? 'none' : 'flex';
+    laserHud.style.display = inVR ? 'none' : 'flex';
+    reticleGroup.visible = inVR;
+    hideVRPanel();
+
+    // Touch controls only make sense on a phone.
+    const touchControls = document.getElementById('touch-controls');
+    if (touchControls) touchControls.style.display = (gameMode === 'phone') ? 'flex' : 'none';
+  }
+
+  function endGame(){
+    state = 'gameover';
+    triggerExplosion(ship.position);
+    ship.visible = false;
+    glowSprite.visible = false;
+
+    flashEl.style.transition = 'none';
+    flashEl.style.opacity = '0.85';
+    requestAnimationFrame(() => {
+      flashEl.style.transition = 'opacity 0.5s ease';
+      flashEl.style.opacity = '0';
+    });
+
+    if (elapsed > bestTime) {
+      bestTime = elapsed;
+      newBestLabel.textContent = 'NEW BEST';
+    } else {
+      newBestLabel.textContent = '';
+    }
+    finalScoreEl.textContent = elapsed.toFixed(1);
+    bestScoreEl.textContent = bestTime.toFixed(1);
+    finalKillsEl.textContent = destroyedCount;
+
+    if (gameMode === 'vr') {
+      setTimeout(() => {
+        showVRPanel('SIGNAL LOST', `TIME ${elapsed.toFixed(1)}  ·  KILLS ${destroyedCount}`, 'PULL TRIGGER TO RETRY');
+      }, 650);
+    } else {
+      setTimeout(() => {
+        gameoverScreen.classList.remove('hidden');
+      }, 650);
+    }
+  }
+
+  // ============================================================
+  //  MAIN LOOP
+  // ============================================================
+  const clock = new THREE.Clock();
+
+  function animate(){
+    const delta = Math.min(clock.getDelta(), 0.05);
+
+    if (state === 'playing') {
+      elapsed += delta;
+      const speedPenalty = Math.floor(destroyedCount / 5) * 0.1 * BASE_SPEED;
+      let speed = Math.min(MAX_SPEED, Math.max(BASE_SPEED, BASE_SPEED + elapsed * ACCEL - speedPenalty));
+      if (gameMode === 'vr') speed *= VR_SPEED_FACTOR; // slightly slower in VR for comfort
+      currentSpeed = speed;
+      distanceTraveled += speed * delta;
+
+      // poll VR controllers (left stick = movement, right trigger = fire)
+      if (gameMode === 'vr') pollVRInput();
+
+      // --- movement ---
+      // keyboard
+      if (keys.left)  playerPos.x -= MOVE_SPEED * delta;
+      if (keys.right) playerPos.x += MOVE_SPEED * delta;
+      if (keys.up)    playerPos.y += MOVE_SPEED * delta;
+      if (keys.down)  playerPos.y -= MOVE_SPEED * delta;
+      // VR left joystick: same screen-position scheme as desktop (x = strafe, y = climb/dive)
+      if (gameMode === 'vr') {
+        const dead = 0.12;
+        const jx = Math.abs(vrInput.x) > dead ? vrInput.x : 0;
+        const jy = Math.abs(vrInput.y) > dead ? vrInput.y : 0;
+        playerPos.x += jx * MOVE_SPEED * delta;
+        playerPos.y -= jy * MOVE_SPEED * delta; // stick up (negative) = climb
+      }
+
+      playerPos.x = THREE.MathUtils.clamp(playerPos.x, BOUNDS.xMin, BOUNDS.xMax);
+      playerPos.y = THREE.MathUtils.clamp(playerPos.y, BOUNDS.yMin, BOUNDS.yMax);
+
+      ship.position.lerp(playerPos, Math.min(1, delta * 14));
+
+      // banking / pitch
+      const targetRoll = ((keys.left?1:0) - (keys.right?1:0)) * 0.5;
+      const targetPitch = ((keys.up?1:0) - (keys.down?1:0)) * -0.35;
+      ship.rotation.z += (targetRoll - ship.rotation.z) * Math.min(1, delta*6);
+      ship.rotation.x += (targetPitch - ship.rotation.x) * Math.min(1, delta*6);
+      ship.rotation.y += delta * 0.6;
+
+      shipLight.intensity = 2 + Math.sin(elapsed * 8) * 0.4;
+
+      // --- trail ---
+      trailHistory.unshift(ship.position.clone());
+      if (trailHistory.length > TRAIL_LEN) trailHistory.pop();
+      for (let i = 0; i < TRAIL_LEN; i++) {
+        const p = trailHistory[i] || ship.position;
+        trailPositions[i*3] = p.x;
+        trailPositions[i*3+1] = p.y;
+        trailPositions[i*3+2] = p.z + 0.3 + i*0.12;
+      }
+      trailGeo.attributes.position.needsUpdate = true;
+      trailMat.opacity = 0.3;
+
+      // --- grid scroll ---
+      grid.position.z = distanceTraveled % GRID_CELL;
+      floorGlow.position.z = 0;
+
+      // --- obstacles ---
+      for (const ob of obstacles) {
+        ob.position.z += speed * delta;
+        ob.rotation.x += ob.userData.rotSpeed.x * delta;
+        ob.rotation.y += ob.userData.rotSpeed.y * delta;
+        ob.rotation.z += ob.userData.rotSpeed.z * delta;
+
+        if (ob.position.z > 12) {
+          resetObstacle(ob, false);
+          continue;
+        }
+
+        // collision check
+        const dz = ob.position.z - ship.position.z;
+        const window_ = ob.userData.scaledRadius + SHIP_RADIUS + 1.0;
+        if (Math.abs(dz) < window_) {
+          const dx = ob.position.x - ship.position.x;
+          const dy = ob.position.y - ship.position.y;
+          const distXY = Math.sqrt(dx*dx + dy*dy);
+          if (distXY < (ob.userData.scaledRadius + SHIP_RADIUS) * 0.82) {
+            endGame();
+          }
+        }
+      }
+
+      // --- lasers ---
+      for (let li = activeLasers.length - 1; li >= 0; li--) {
+        const laser = activeLasers[li];
+        if (!laser.alive) { activeLasers.splice(li, 1); continue; }
+
+        // lasers travel along their velocity vector (forward, or toward gaze in VR)
+        laser.group.position.addScaledVector(laser.velocity, delta);
+
+        // remove if far from the ship in any direction
+        if (laser.group.position.z < -300 ||
+            laser.group.position.distanceTo(ship.position) > 320) {
+          removeLaser(laser);
+          activeLasers.splice(li, 1);
+          continue;
+        }
+
+        // check laser-obstacle collision
+        let hit = false;
+        for (const ob of obstacles) {
+          const dx = ob.position.x - laser.group.position.x;
+          const dy = ob.position.y - laser.group.position.y;
+          const dz = ob.position.z - laser.group.position.z;
+          const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+          if (dist < ob.userData.scaledRadius * 0.85 + laser.radius) {
+            // hit!
+            triggerImpact(laser.group.position.clone(), laser.color);
+            removeLaser(laser);
+            activeLasers.splice(li, 1);
+            resetObstacle(ob, false);
+            destroyedCount++;
+            // milestone: every 5 kills = +1 laser level, -0.1x velocity
+            if (destroyedCount % 5 === 0) {
+              milestoneDisplay.textContent = `LASER LV.${getLaserLevel()} · -0.1x VELOCITY!`;
+              setTimeout(() => { milestoneDisplay.textContent = ''; }, 2000);
+            }
+            hit = true;
+            break;
+          }
+        }
+        if (hit) continue;
+      }
+
+      // --- impact flashes ---
+      for (let fi = impactFlashes.length - 1; fi >= 0; fi--) {
+        const f = impactFlashes[fi];
+        f.life -= delta * 3.2;
+        if (f.life <= 0) {
+          scene.remove(f.sprite);
+          scene.remove(f.light);
+          scene.remove(f.ring);
+          for (const s of f.shards) scene.remove(s.mesh);
+          for (const s of f.streaks) scene.remove(s.line);
+          impactFlashes.splice(fi, 1);
+          continue;
+        }
+
+        const t = 1 - f.life; // 0→1 as explosion ages
+        const fadeOut = f.life * f.life;
+
+        // glow flash: expand fast then fade
+        f.sprite.material.opacity = fadeOut * 0.9;
+        f.sprite.scale.setScalar(4 + t * 10);
+
+        // point light dims
+        f.light.intensity = f.life * 5;
+
+        // ring: expand outward and fade
+        const ringScale = 0.3 + t * 5;
+        f.ring.scale.setScalar(ringScale);
+        f.ring.material.opacity = f.life * 0.8;
+
+        // debris shards: fly out with drag, spin, fade late
+        for (const s of f.shards) {
+          s.mesh.position.x += s.vx * delta;
+          s.mesh.position.y += s.vy * delta - delta * 2.5; // slight gravity
+          s.mesh.position.z += s.vz * delta;
+          s.vx *= 0.92; s.vy *= 0.92; s.vz *= 0.92; // drag
+          s.mesh.rotation.x += s.spin.x * delta;
+          s.mesh.rotation.y += s.spin.y * delta;
+          s.mesh.rotation.z += s.spin.z * delta;
+          s.mesh.material.opacity = Math.max(0, f.life * 1.4 - 0.4);
+        }
+
+        // streaks: fly out and fade quickly
+        for (const s of f.streaks) {
+          s.line.position.x += s.vx * delta;
+          s.line.position.y += s.vy * delta;
+          s.line.position.z += s.vz * delta;
+          s.vx *= 0.88; s.vy *= 0.88; s.vz *= 0.88;
+          s.line.material.opacity = Math.max(0, f.life * 1.6 - 0.6);
+        }
+      }
+      if (gameMode === 'vr') {
+        // --- VR camera: sit above-and-behind the sphere, looking over its top ---
+        const rigTargetX = ship.position.x;
+        const rigTargetY = ship.position.y + 0.85; // elevate the vantage point over the top
+        const rigTargetZ = ship.position.z + 2.4;  // pull back so the sphere doesn't fill the view
+        cameraRig.position.x += (rigTargetX - cameraRig.position.x) * Math.min(1, delta*6);
+        cameraRig.position.y += (rigTargetY - cameraRig.position.y) * Math.min(1, delta*6);
+        cameraRig.position.z += (rigTargetZ - cameraRig.position.z) * Math.min(1, delta*6);
+
+        // --- head-gaze reticle: project from head along its forward direction ---
+        const headPos = new THREE.Vector3();
+        const headDir = new THREE.Vector3();
+        camera.getWorldPosition(headPos);
+        camera.getWorldDirection(headDir);
+        const reticleDist = 26;
+        reticleGroup.position.copy(headPos).addScaledVector(headDir, reticleDist);
+        // face the reticle back toward the player
+        reticleGroup.lookAt(headPos);
+        const pulse = 0.9 + Math.sin(performance.now() * 0.006) * 0.1;
+        reticleGroup.scale.setScalar(pulse);
+      } else {
+        const camTargetX = playerPos.x * 0.55;
+        const camTargetY = playerPos.y + 1.7;
+        camera.position.x += (camTargetX - camera.position.x) * Math.min(1, delta*4);
+        camera.position.y += (camTargetY - camera.position.y) * Math.min(1, delta*4);
+        camera.position.z = 7.5;
+        camera.lookAt(playerPos.x * 0.3, playerPos.y - 0.2, -30);
+      }
+
+      // --- HUD (DOM overlay; not visible in VR, so skip) ---
+      if (gameMode !== 'vr') {
+        scoreDisplay.textContent = elapsed.toFixed(1);
+        speedDisplay.textContent = 'x' + (speed / BASE_SPEED).toFixed(1);
+        killsDisplay.textContent = destroyedCount;
+        const cooldownPct = Math.min(1, (elapsed - lastShotTime) / SHOT_COOLDOWN);
+        const lvl = getLaserLevel();
+        laserFill.style.width = (cooldownPct * 100) + '%';
+        if (cooldownPct >= 1) {
+          laserFill.style.background = 'linear-gradient(90deg, #00c4cc, #00f0ff)';
+          laserFill.style.boxShadow = '0 0 10px #00f0ff, 0 0 20px rgba(0,240,255,0.5)';
+          laserStatusLabel.textContent = `LASER LV.${lvl}  ·  READY`;
+          laserStatusLabel.classList.add('ready');
+        } else {
+          const r = Math.round(120 + 135 * cooldownPct);
+          const g = Math.round(10 + 36 * cooldownPct);
+          const b = Math.round(30 + 97 * cooldownPct);
+          laserFill.style.background = `rgb(${r},${g},${b})`;
+          laserFill.style.boxShadow = `0 0 ${4 + cooldownPct * 8}px rgba(255,46,135,${0.3 + cooldownPct * 0.5})`;
+          laserStatusLabel.textContent = `LASER LV.${lvl}  ·  COOLING`;
+          laserStatusLabel.classList.remove('ready');
+        }
+      }
+    } else {
+      // idle ambient drift for camera on start screen (desktop/phone only)
+      if (gameMode !== 'vr') {
+        cameraRig.position.set(0, 0, 0); // ensure rig is neutral for non-VR camera math
+        camera.position.x = Math.sin(performance.now()*0.0002) * 1.5;
+        camera.position.y = 2.6 + Math.sin(performance.now()*0.00015) * 0.4;
+        camera.position.z = 8;
+        camera.lookAt(0, 1.5, -30);
+      }
+    }
+
+    // --- explosion particles update ---
+    if (particleLife > 0) {
+      particleLife -= delta * 0.8;
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        particlePos[i*3]   += particleVelocities[i*3]   * delta;
+        particlePos[i*3+1] += particleVelocities[i*3+1] * delta - delta*3; // gravity
+        particlePos[i*3+2] += particleVelocities[i*3+2] * delta;
+      }
+      particleGeo.attributes.position.needsUpdate = true;
+      particleMat.opacity = Math.max(0, particleLife);
+    }
+
+    // gentle sun bob
+    sun.position.y = 17 + Math.sin(performance.now()*0.0003) * 1.2;
+    halo.position.y = sun.position.y;
+
+    renderer.render(scene, camera);
+  }
+
+  renderer.setAnimationLoop(animate);
+})();
+</script>
+</body>
+</html>
