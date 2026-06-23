@@ -85,7 +85,9 @@
   <div class="row"><span>Mode</span><span id="pm">Walk</span></div>
   <div class="row"><span>Collision</span><span id="pc">On</span></div>
   <div class="row"><span>Rabbits</span><span id="pt">30</span></div>
-  <div class="row"><span>Kills</span><span id="pk">0</span></div>
+  <div class="row"><span>Rabbit kills</span><span id="pk">0</span></div>
+  <div class="row"><span>Salmon</span><span id="psa">12</span></div>
+  <div class="row"><span>Salmon kills</span><span id="psk">0</span></div>
   <div class="zone"><span id="zone">Open forest</span></div>
 </div>
 
@@ -398,8 +400,8 @@ function updateVRHud(){
   c2.fillStyle='#b9b4a4'; c2.font='13px sans-serif'; c2.fillText(flying?'fly':'walk',150,40);
   c2.fillStyle=collide?'#7fae5a':'#c98a4a'; c2.font='13px sans-serif';
   c2.fillText('collision '+(collide?'on':'off'),150,60);
-  c2.fillStyle='#e2a23a'; c2.fillText('alive '+targets.length,150,80);
-  c2.fillText('kills '+kills,150,98);
+  c2.fillStyle='#e2a23a'; c2.fillText('rab '+targets.length+'/'+kills,150,80);
+  c2.fillStyle='#d98a7a'; c2.fillText('sal '+salmon.length+'/'+salmonKills,150,98);
   vrTex.needsUpdate=true;
 }
 
@@ -533,6 +535,7 @@ function spawnHitBurst(x,y,z){ puff(x,y,z,18,0xf3efe6,0.2,2.6,0.7); puff(x,y,z,1
 
 // ----- rabbit targets in the meadow -----
 const targets=[];
+const salmon=[]; let salmonKills=0; const salmonRespawnQ=[];
 function makeRabbit(){
   const fur=new THREE.MeshPhongMaterial({color:0x9b8a72,flatShading:true,shininess:5});
   const white=new THREE.MeshPhongMaterial({color:0xf3efe6,flatShading:true,shininess:5});
@@ -552,6 +555,7 @@ function makeRabbit(){
 function disposeGroup(g){ g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }); }
 let kills=0; const respawnQ=[];
 function isWaterAt(x,z){ const ix=Math.round(x)+HALF, iz=Math.round(z)+HALF; if(ix<0||ix>=N||iz<0||iz>=N) return true; return isWater[iz*N+ix]===1; }
+function waterTopAt(x,z){ const ix=Math.round(x)+HALF, iz=Math.round(z)+HALF; if(ix<0||ix>=N||iz<0||iz>=N) return GROUND; return waterTop[iz*N+ix]||GROUND; }
 function randSpawn(){
   for(let k=0;k<80;k++){
     const x=-92+Math.random()*184, z=-92+Math.random()*184;
@@ -566,7 +570,7 @@ function addRabbit(x,z,base){
   targets.push({mesh:m,cx:x,cz:z,base,sbase:base,top:base+0.95, stepT:Math.random(), hopping:false, hopT:0, sx:x,sz:z,tx:x,tz:z});
 }
 function spawnTargets(){ for(let n=0;n<30;n++){ const s=randSpawn(); addRabbit(s.x,s.z,s.base); } updateTargetHud(); }
-function updateTargetHud(){ const a=document.getElementById('pt'), k=document.getElementById('pk'); if(a) a.textContent=targets.length; if(k) k.textContent=kills; }
+function updateTargetHud(){ const a=document.getElementById('pt'), k=document.getElementById('pk'), sa=document.getElementById('psa'), sk=document.getElementById('psk'); if(a) a.textContent=targets.length; if(k) k.textContent=kills; if(sa) sa.textContent=salmon.length; if(sk) sk.textContent=salmonKills; }
 function updateTargets(dt){
   for(let i=respawnQ.length-1;i>=0;i--){ respawnQ[i]-=dt; if(respawnQ[i]<=0){ respawnQ.splice(i,1); const s=randSpawn(); addRabbit(s.x,s.z,s.base); updateTargetHud(); } }
   for(const t of targets){
@@ -592,8 +596,49 @@ function updateTargets(dt){
   }
 }
 
+function makeSalmon(){
+  const red=new THREE.MeshPhongMaterial({color:0xc0392b,flatShading:true,shininess:12});
+  const dark=new THREE.MeshPhongMaterial({color:0x8e2b22,flatShading:true,shininess:12});
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.SphereGeometry(0.18,8,6),red); body.scale.set(0.62,0.62,1.9); g.add(body);
+  const tail=new THREE.Mesh(new THREE.ConeGeometry(0.15,0.26,3),dark); tail.rotation.x=-Math.PI/2; tail.scale.set(0.4,1,1); tail.position.z=-0.4; g.add(tail);
+  return g;
+}
+function randWater(stream){
+  for(let k=0;k<120;k++){
+    let x,z;
+    if(stream){ x=-50+Math.random()*46; z=-40+Math.random()*135; }   // stream corridor
+    else { x=-73+Math.random()*32; z=-63+Math.random()*24; }          // lake bbox
+    if(!isWaterAt(x,z)) continue;
+    const bx=x*SCALE, bz=z*SCALE, le=((bx+285)/78)**2+((bz+255)/60)**2;
+    if(stream){ if(le<=1.05) continue; } else { if(le>1.0) continue; }
+    return {x,z};
+  }
+  return {x:-57,z:-51};
+}
+function addSalmon(){
+  const stream=Math.random()<0.22, s=randWater(stream), y=waterTopAt(s.x,s.z)-0.3;
+  const m=makeSalmon(); m.position.set(s.x,y,s.z); scene.add(m);
+  salmon.push({mesh:m,cx:s.x,cz:s.z,y,heading:Math.random()*Math.PI*2,spd:1.4+Math.random()*0.7,turnT:Math.random()*2});
+  updateTargetHud();
+}
+function spawnSalmon(){ for(let n=0;n<12;n++) addSalmon(); }
+function spawnFishBurst(x,y,z){ puff(x,y,z,16,0xbfe3f0,0.18,2.2,0.6); puff(x,y,z,10,0xc0392b,0.16,2.0,0.55); }
+function updateSalmon(dt){
+  for(let i=salmonRespawnQ.length-1;i>=0;i--){ salmonRespawnQ[i]-=dt; if(salmonRespawnQ[i]<=0){ salmonRespawnQ.splice(i,1); addSalmon(); } }
+  for(const f of salmon){
+    f.turnT-=dt; if(f.turnT<=0){ f.heading+=(Math.random()-0.5)*1.4; f.turnT=1+Math.random()*2; }   // gentle wander
+    const vx=Math.cos(f.heading), vz=Math.sin(f.heading);
+    const nx=f.cx+vx*f.spd*dt, nz=f.cz+vz*f.spd*dt;
+    if(isWaterAt(nx,nz)){ f.cx=nx; f.cz=nz; } else { f.heading+=Math.PI*0.5+Math.random()*Math.PI; }    // turn off the bank
+    f.y=waterTopAt(f.cx,f.cz)-0.3;
+    f.mesh.position.set(f.cx,f.y,f.cz); f.mesh.rotation.y=Math.atan2(vx,vz);
+  }
+}
+
 function updateProjectiles(dt){
   updateTargets(dt);
+  updateSalmon(dt);
   if(fireCool>0) fireCool-=dt;
   for(let i=spears.length-1;i>=0;i--){
     const s=spears[i]; s.life+=dt; s.mesh.position.addScaledVector(s.vel,dt);
@@ -604,6 +649,11 @@ function updateProjectiles(dt){
       if(ddx*ddx+ddz*ddz<0.25 && p.y>=t.base-0.1 && p.y<=t.top){
         spawnHitBurst(t.cx,t.base+0.42,t.cz);
         scene.remove(t.mesh); disposeGroup(t.mesh); targets.splice(ti,1); kills++; respawnQ.push(1+Math.random()); updateTargetHud(); hitR=true; break; }
+    }
+    if(!hitR) for(let ti=salmon.length-1;ti>=0;ti--){ const f=salmon[ti];
+      const ddx=p.x-f.cx, ddz=p.z-f.cz;
+      if(ddx*ddx+ddz*ddz<0.25 && p.y>=f.y-0.3 && p.y<=f.y+0.3){
+        spawnFishBurst(f.cx,f.y,f.cz); scene.remove(f.mesh); disposeGroup(f.mesh); salmon.splice(ti,1); salmonKills++; salmonRespawnQ.push(1+Math.random()); updateTargetHud(); hitR=true; break; }
     }
     if(hitR){ scene.remove(s.mesh); disposeGroup(s.mesh); spears.splice(i,1); continue; }
     const hit = Math.abs(p.x)>HALF||Math.abs(p.z)>HALF || p.y<=terrTop(p.x,p.z) || treeBlocks(p.x,p.z,p.y) || hornBlocks(p.x,p.z,p.y) || s.life>5;
@@ -619,6 +669,7 @@ function updateProjectiles(dt){
   }
 }
 spawnTargets();
+spawnSalmon();
 
 const clock=new THREE.Clock(), fwd=new THREE.Vector3(), right=new THREE.Vector3(), up=new THREE.Vector3(0,1,0), tmp=new THREE.Vector3();
 function clamp1(v){ return Math.max(-1,Math.min(1,v)); }
