@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Asteroid Breaker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --space:#05070d;
+    --cyan:#45e0ff;
+    --amber:#ffb02e;
+    --danger:#ff3b5c;
+    --green:#7cff9b;
+    --ink:#cfe9ff;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--space);font-family:'Share Tech Mono',monospace;color:var(--ink);-webkit-tap-highlight-color:transparent}
+  #app{position:fixed;inset:0}
+  canvas{display:block}
+
+  /* ---------- Overlays ---------- */
+  .overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;z-index:30}
+  .panel{
+    max-width:520px;width:100%;
+    background:linear-gradient(180deg, rgba(8,14,26,.92), rgba(4,7,13,.96));
+    border:1px solid rgba(69,224,255,.35);
+    border-radius:14px;
+    box-shadow:0 0 60px rgba(69,224,255,.12), inset 0 0 40px rgba(69,224,255,.04);
+    padding:30px 26px 26px;
+    backdrop-filter:blur(2px);
+  }
+  .eyebrow{font-size:12px;letter-spacing:.42em;color:var(--cyan);opacity:.85;margin-bottom:10px}
+  h1{font-family:'Orbitron',sans-serif;font-weight:900;font-size:clamp(30px,8vw,52px);line-height:.96;letter-spacing:.02em;
+     background:linear-gradient(180deg,#eafbff,#45e0ff 60%,#1b7fa6);
+     -webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 0 30px rgba(69,224,255,.25)}
+  .tagline{margin:14px auto 4px;font-size:13px;line-height:1.6;color:#9fc6e6;max-width:42ch}
+  .modes{display:flex;flex-direction:column;gap:10px;margin-top:22px}
+  .btn{
+    font-family:'Orbitron',sans-serif;font-weight:700;letter-spacing:.14em;font-size:14px;
+    padding:15px 18px;border-radius:10px;cursor:pointer;color:#eafbff;
+    background:rgba(69,224,255,.08);border:1px solid rgba(69,224,255,.45);
+    transition:transform .08s ease, background .15s ease, box-shadow .15s ease;
+    display:flex;justify-content:space-between;align-items:center;gap:14px;text-align:left;
+  }
+  .btn small{font-family:'Share Tech Mono',monospace;font-weight:400;letter-spacing:.04em;font-size:11px;color:#7fb6d8}
+  .btn:hover{background:rgba(69,224,255,.16);box-shadow:0 0 22px rgba(69,224,255,.18)}
+  .btn:active{transform:translateY(1px)}
+  .btn:disabled{opacity:.38;cursor:not-allowed;border-color:rgba(120,150,170,.4)}
+  .btn.vr{border-color:rgba(124,255,155,.5)}
+  .btn.vr:hover{background:rgba(124,255,155,.12);box-shadow:0 0 22px rgba(124,255,155,.18)}
+  .note{margin-top:16px;font-size:11px;color:#6f93b0;line-height:1.5}
+  .keys{margin-top:14px;font-size:11px;color:#7fb6d8;line-height:1.7;text-align:left;border-top:1px solid rgba(69,224,255,.14);padding-top:12px}
+  .keys b{color:var(--cyan);font-weight:400}
+  .hidden{display:none !important}
+
+  /* ---------- HUD (desktop / mobile) ---------- */
+  #hud{position:fixed;inset:0;z-index:20;pointer-events:none;display:none}
+  #cockpit{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+  #hud .corner{position:absolute;font-size:13px;letter-spacing:.12em;text-shadow:0 0 10px rgba(0,0,0,.8)}
+  #score{top:14px;left:50%;transform:translateX(-50%);text-align:center}
+  #score .big{font-family:'Orbitron',sans-serif;font-weight:700;font-size:26px;color:#eafbff;letter-spacing:.06em}
+  #score .lbl{font-size:10px;letter-spacing:.4em;color:var(--cyan);opacity:.8}
+  #lives{top:14px;right:16px;text-align:right;color:var(--cyan)}
+  #lives .ships{font-size:20px;letter-spacing:3px;color:var(--cyan)}
+  #level{top:14px;left:16px;color:var(--amber)}
+  #powerup{bottom:74px;left:50%;transform:translateX(-50%);color:var(--green);font-size:14px;letter-spacing:.2em;opacity:0;transition:opacity .2s}
+  #crosshair{position:absolute;top:50%;left:50%;width:42px;height:42px;margin:-21px 0 0 -21px;opacity:.92;
+    border:2px solid var(--cyan);border-radius:50%;
+    box-shadow:0 0 10px rgba(69,224,255,.5), inset 0 0 8px rgba(69,224,255,.22)}
+  #crosshair::before{content:"";position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px 0 0 -2px;
+    border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+  #flash{position:fixed;inset:0;background:var(--danger);opacity:0;pointer-events:none;z-index:21;transition:opacity .08s}
+  #dhint{position:fixed;left:50%;bottom:118px;transform:translateX(-50%);z-index:23;display:none;
+    font-size:11px;letter-spacing:.2em;color:#9fc6e6;opacity:.85;pointer-events:none;text-shadow:0 0 8px #000}
+
+  /* desktop motion comfort vignette (subtle) */
+  #vignette{position:fixed;inset:0;pointer-events:none;z-index:19;opacity:0;transition:opacity .25s;
+    background:radial-gradient(ellipse at center, transparent 42%, rgba(0,0,0,.82) 86%)}
+
+  /* ---------- Mobile controls ---------- */
+  #touch{position:fixed;inset:0;z-index:22;display:none}
+  #stick{position:absolute;left:22px;bottom:24px;width:128px;height:128px;border-radius:50%;
+    border:1px solid rgba(69,224,255,.35);background:rgba(69,224,255,.05);pointer-events:auto;touch-action:none}
+  #stick .nub{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;
+    background:rgba(69,224,255,.3);border:1px solid rgba(69,224,255,.6)}
+  .tbtn{position:absolute;pointer-events:auto;touch-action:none;border-radius:50%;
+    font-family:'Orbitron',sans-serif;font-weight:700;display:flex;align-items:center;justify-content:center;color:#eafbff;user-select:none}
+  #fire{right:22px;bottom:30px;width:96px;height:96px;font-size:14px;letter-spacing:.1em;
+    background:rgba(255,59,92,.16);border:1px solid rgba(255,59,92,.6)}
+  #upbtn{right:130px;bottom:96px;width:60px;height:60px;font-size:20px;background:rgba(69,224,255,.1);border:1px solid rgba(69,224,255,.5)}
+  #dnbtn{right:130px;bottom:24px;width:60px;height:60px;font-size:20px;background:rgba(69,224,255,.1);border:1px solid rgba(69,224,255,.5)}
+  #look{position:absolute;right:0;top:0;width:55%;height:62%;pointer-events:auto;touch-action:none}
+
+  #exit{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:25;display:none;pointer-events:auto;
+    font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:.12em;padding:7px 14px;border-radius:8px;
+    background:rgba(255,59,92,.12);border:1px solid rgba(255,59,92,.5);color:#ffd7df;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<!-- START -->
+<div id="start" class="overlay">
+  <div class="panel">
+    <div class="eyebrow">DAD'S VR GAMES</div>
+    <h1>ASTEROID<br>BREAKER</h1>
+    <p class="tagline">Adrift in the belt. Asteroids tumble in from every direction and split when you hit them. A hostile saucer hunts you. Three lives. Break everything.</p>
+    <div class="modes">
+      <button class="btn" id="m-desktop">DESKTOP <small>mouse + keyboard</small></button>
+      <button class="btn" id="m-phone">PHONE <small>touch sticks</small></button>
+      <button class="btn vr" id="m-vr">VR <small>Quest / WebXR</small></button>
+    </div>
+    <div class="keys" id="key-help">
+      <b>Desktop:</b> Drag (or move) mouse to look · <b>W/A/S/D</b> thrust · <b>Space/Shift</b> up · <b>Ctrl</b> down · <b>Click</b> fire
+    </div>
+    <div class="note" id="vr-note"></div>
+  </div>
+</div>
+
+<!-- GAME OVER -->
+<div id="gameover" class="overlay hidden">
+  <div class="panel">
+    <div class="eyebrow" style="color:var(--danger)">SIGNAL LOST</div>
+    <h1 style="background:linear-gradient(180deg,#ffe6ea,#ff3b5c 60%,#7a1228);-webkit-background-clip:text;background-clip:text">GAME OVER</h1>
+    <p class="tagline" id="go-stats">Score 0 · Reached level 1</p>
+    <div class="modes">
+      <button class="btn" id="again">RE-ENTER THE BELT</button>
+    </div>
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <svg id="cockpit" viewBox="0 0 1000 600" preserveAspectRatio="none">
+    <defs>
+      <linearGradient id="glassTop" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#45e0ff" stop-opacity="0.10"/>
+        <stop offset="1" stop-color="#45e0ff" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="dashGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#0a1422" stop-opacity="0.28"/>
+        <stop offset="0.5" stop-color="#06101c" stop-opacity="0.74"/>
+        <stop offset="1" stop-color="#03080f" stop-opacity="0.92"/>
+      </linearGradient>
+    </defs>
+    <!-- top canopy glass tint + rail -->
+    <path d="M0,0 L1000,0 L1000,42 Q500,82 0,42 Z" fill="url(#glassTop)"/>
+    <path d="M0,42 Q500,82 1000,42" fill="none" stroke="#45e0ff" stroke-opacity="0.5" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    <!-- A-pillar struts -->
+    <path d="M44,42 L150,600" fill="none" stroke="#8fc4e4" stroke-opacity="0.32" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    <path d="M956,42 L850,600" fill="none" stroke="#8fc4e4" stroke-opacity="0.32" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    <!-- side rails -->
+    <path d="M13,28 L13,560" fill="none" stroke="#45e0ff" stroke-opacity="0.22" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    <path d="M987,28 L987,560" fill="none" stroke="#45e0ff" stroke-opacity="0.22" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    <!-- dashboard -->
+    <path d="M0,600 L0,508 Q500,470 1000,508 L1000,600 Z" fill="url(#dashGrad)" stroke="#45e0ff" stroke-opacity="0.45" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    <path d="M70,548 L930,548" fill="none" stroke="#45e0ff" stroke-opacity="0.18" stroke-width="1" vector-effect="non-scaling-stroke"/>
+    <!-- corner braces -->
+    <path d="M0,96 L0,0 L96,0" fill="none" stroke="#45e0ff" stroke-opacity="0.4" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    <path d="M1000,96 L1000,0 L904,0" fill="none" stroke="#45e0ff" stroke-opacity="0.4" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    <!-- glass sheen -->
+    <polygon points="70,0 250,0 120,170" fill="#ffffff" opacity="0.03"/>
+  </svg>
+  <div class="corner" id="level">LVL 1</div>
+  <div class="corner" id="score"><div class="big">0</div><div class="lbl">SCORE</div></div>
+  <div class="corner" id="lives"><div class="ships">▲ ▲ ▲</div></div>
+  <div class="corner" id="powerup"></div>
+  <div id="crosshair"></div>
+</div>
+<div id="vignette"></div>
+<div id="flash"></div>
+<div id="dhint">DRAG TO LOOK · CLICK TO FIRE · WASD THRUST</div>
+
+<!-- TOUCH -->
+<div id="touch">
+  <div id="stick"><div class="nub"></div></div>
+  <div id="look"></div>
+  <div class="tbtn" id="upbtn">▲</div>
+  <div class="tbtn" id="dnbtn">▼</div>
+  <div class="tbtn" id="fire">FIRE</div>
+</div>
+
+<button id="exit">EXIT</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   CONFIG  — tune the game feel here
+   ============================================================ */
+const CFG = {
+  BOUND: 90,            // half-size of the wrap-around play cube
+  STAR_COUNT: 1400,
+  // movement
+  MOVE_ACCEL: 67.5,     // thrust accel (units/s^2)
+  MOVE_MAX: 47.5,       // max speed (units/s)
+  DRAG: 0.86,           // velocity damping per second-ish
+  LOOK_SENS: 0.0024,    // desktop mouse look
+  VR_MOVE_SCALE: 0.62,  // comfort: slower flight in VR
+  SNAP_TURN_DEG: 30,    // VR snap turn increment
+  // weapons
+  BOLT_SPEED: 120,
+  BOLT_LIFE: 1.1,
+  FIRE_COOLDOWN: 0.22,
+  RAPID_COOLDOWN: 0.10,
+  RETICLE_DIST: 14,     // VR reticle float distance along the pointer
+  // asteroids
+  R_LARGE: 3.4, R_MED: 2.0, R_SMALL: 1.05,
+  AST_SPEED_MIN: 2.5, AST_SPEED_MAX: 7.0,
+  START_LARGE: 4,       // large asteroids on level 1
+  // scoring (classic)
+  PTS_LARGE: 20, PTS_MED: 50, PTS_SMALL: 100, PTS_UFO: 200,
+  EXTRA_LIFE_EVERY: 10000,
+  // ufo
+  UFO_FIRST: 22,        // seconds before first saucer
+  UFO_EVERY: [18, 30],  // random gap range between saucers
+  UFO_SPEED: 9,
+  UFO_FIRE_EVERY: 2.4,
+  UFO_BOLT_SPEED: 26,
+  // power-ups
+  DROP_CHANCE: 0.16,    // chance a destroyed rock/ufo drops a pickup
+  PU_DURATION: 12,      // rapid / triple duration (s)
+  PU_PICKUP_R: 2.6,
+  // player
+  START_LIVES: 3,
+  INVULN_TIME: 3.0,     // post-hit invulnerability
+  PLAYER_R: 1.4,        // collision radius
+};
+
+const PU = { RAPID:'RAPID FIRE', TRIPLE:'TRIPLE SHOT', SHIELD:'SHIELD', LIFE:'+1 LIFE' };
+
+/* ============================================================
+   RENDERER / SCENE
+   ============================================================ */
+const app = document.getElementById('app');
+const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.xr.enabled = true;
+app.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x05070d);
+
+const camera = new THREE.PerspectiveCamera(72, window.innerWidth/window.innerHeight, 0.1, 600);
+
+// dolly rig: camera lives inside; headset poses camera in VR, we move/rotate the dolly for locomotion
+const dolly = new THREE.Group();
+dolly.add(camera);
+scene.add(dolly);
+
+// lights
+scene.add(new THREE.AmbientLight(0x33405a, 0.9));
+const key = new THREE.DirectionalLight(0xbfe6ff, 1.05); key.position.set(40, 60, 20); scene.add(key);
+const rim = new THREE.DirectionalLight(0xff7a3c, 0.5); rim.position.set(-50, -20, -40); scene.add(rim);
+
+/* ---- starfield (fog:false so nothing washes it out) ---- */
+(function(){
+  const g = new THREE.BufferGeometry();
+  const pos = new Float32Array(CFG.STAR_COUNT*3);
+  for(let i=0;i<CFG.STAR_COUNT;i++){
+    const r = 200 + Math.random()*260;
+    const t = Math.random()*Math.PI*2, p = Math.acos(2*Math.random()-1);
+    pos[i*3]   = r*Math.sin(p)*Math.cos(t);
+    pos[i*3+1] = r*Math.sin(p)*Math.sin(t);
+    pos[i*3+2] = r*Math.cos(p);
+  }
+  g.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  const m = new THREE.PointsMaterial({ color:0xbcd6ff, size:1.3, sizeAttenuation:false, fog:false });
+  scene.add(new THREE.Points(g, m));
+})();
+
+// faint colored nebula blobs for depth
+(function(){
+  const cols = [0x14233f, 0x2a1430, 0x102a2a];
+  for(let i=0;i<3;i++){
+    const m = new THREE.Mesh(
+      new THREE.SphereGeometry(120, 16, 16),
+      new THREE.MeshBasicMaterial({ color:cols[i], transparent:true, opacity:0.05, side:THREE.BackSide, fog:false })
+    );
+    m.position.set((Math.random()-0.5)*240,(Math.random()-0.5)*240,(Math.random()-0.5)*240);
+    scene.add(m);
+  }
+})();
+
+/* ============================================================
+   GAME STATE
+   ============================================================ */
+let state = 'start';            // 'start' | 'playing' | 'gameover'
+let mode  = 'desktop';          // 'desktop' | 'phone' | 'vr'
+let score = 0, lives = CFG.START_LIVES, level = 1, nextExtra = CFG.EXTRA_LIFE_EVERY;
+let invuln = 0, shield = false;
+let rapidT = 0, tripleT = 0;
+let clock = new THREE.Clock();
+
+const asteroids = [];   // {mesh, vel, rot, tier, radius}
+const bolts = [];       // {mesh, vel, life, hostile}
+const ufos = [];        // {mesh, vel, fireT}
+const pickups = [];     // {mesh, kind, spin}
+const fx = [];          // particle systems {pts, vels, life, max}
+
+let ufoTimer = CFG.UFO_FIRST;
+
+// velocity of the ship (6-DOF)
+const vel = new THREE.Vector3();
+let yaw = 0, pitch = 0;          // desktop look
+let moveSpeedDisplay = 0;
+
+/* ============================================================
+   GEOMETRY FACTORIES
+   ============================================================ */
+const rockMat = new THREE.MeshPhongMaterial({ color:0x6b6358, emissive:0x141210, shininess:6, flatShading:true });
+const rockMat2 = new THREE.MeshPhongMaterial({ color:0x57636b, emissive:0x10171a, shininess:6, flatShading:true });
+
+function makeRockGeo(radius){
+  const g = new THREE.IcosahedronGeometry(radius, 1);
+  const p = g.attributes.position;
+  for(let i=0;i<p.count;i++){
+    const f = 0.78 + Math.random()*0.42;
+    p.setXYZ(i, p.getX(i)*f, p.getY(i)*f, p.getZ(i)*f);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
+function spawnAsteroid(tier, posn, basevel){
+  const radius = tier===0?CFG.R_LARGE : tier===1?CFG.R_MED : CFG.R_SMALL;
+  const mesh = new THREE.Mesh(makeRockGeo(radius), Math.random()<0.5?rockMat:rockMat2);
+  if(posn) mesh.position.copy(posn);
+  else {
+    // spawn on a shell around the player, never right on top
+    const dir = new THREE.Vector3(Math.random()-0.5,Math.random()-0.5,Math.random()-0.5).normalize();
+    mesh.position.copy(dolly.position).addScaledVector(dir, 40 + Math.random()*40);
+  }
+  const speed = CFG.AST_SPEED_MIN + Math.random()*(CFG.AST_SPEED_MAX-CFG.AST_SPEED_MIN) + level*0.4;
+  const v = basevel ? basevel.clone() :
+    new THREE.Vector3(Math.random()-0.5,Math.random()-0.5,Math.random()-0.5).normalize().multiplyScalar(speed);
+  scene.add(mesh);
+  asteroids.push({ mesh, vel:v, rot:new THREE.Vector3((Math.random()-0.5)*1.4,(Math.random()-0.5)*1.4,(Math.random()-0.5)*1.4), tier, radius });
+}
+
+function makeUfo(){
+  const grp = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.SphereGeometry(1.0, 16, 8),
+    new THREE.MeshPhongMaterial({ color:0x2c3a2c, emissive:0x0a140a, shininess:30, flatShading:true })
+  );
+  body.scale.set(2.2, 0.55, 2.2);
+  const dome = new THREE.Mesh(
+    new THREE.SphereGeometry(0.9, 16, 8, 0, Math.PI*2, 0, Math.PI/2),
+    new THREE.MeshPhongMaterial({ color:0xffb02e, emissive:0x5a3c00, transparent:true, opacity:0.8 })
+  );
+  dome.position.y = 0.35;
+  grp.add(body, dome);
+  // running lights
+  for(let i=0;i<6;i++){
+    const a = i/6*Math.PI*2;
+    const l = new THREE.Mesh(new THREE.SphereGeometry(0.16,6,6), new THREE.MeshBasicMaterial({color:0xff3b5c}));
+    l.position.set(Math.cos(a)*2.0, -0.1, Math.sin(a)*2.0);
+    grp.add(l);
+  }
+  // enter from a random edge
+  const side = new THREE.Vector3(Math.random()-0.5,(Math.random()-0.5)*0.5,Math.random()-0.5).normalize().multiplyScalar(CFG.BOUND*0.9);
+  grp.position.copy(dolly.position).add(side);
+  const v = dolly.position.clone().sub(grp.position).normalize().multiplyScalar(CFG.UFO_SPEED);
+  // add lateral weave
+  v.add(new THREE.Vector3(-v.z,0,v.x).normalize().multiplyScalar(CFG.UFO_SPEED*0.5));
+  scene.add(grp);
+  ufos.push({ mesh:grp, vel:v, fireT:CFG.UFO_FIRE_EVERY*0.6, weave:Math.random()*Math.PI*2 });
+}
+
+/* ---- bolts ---- */
+const boltGeo = new THREE.CylinderGeometry(0.10,0.10,1.5,6);
+boltGeo.rotateX(Math.PI/2); // align +Z
+const boltMat = new THREE.MeshBasicMaterial({ color:0x9be9ff, fog:false });
+const hostileMat = new THREE.MeshBasicMaterial({ color:0xff3b5c, fog:false });
+
+function fireBolt(origin, dir, hostile){
+  const mesh = new THREE.Mesh(boltGeo, hostile?hostileMat:boltMat);
+  mesh.position.copy(origin);
+  mesh.quaternion.copy(quatFromDir(dir));
+  scene.add(mesh);
+  const speed = hostile?CFG.UFO_BOLT_SPEED:CFG.BOLT_SPEED;
+  bolts.push({ mesh, vel:dir.clone().multiplyScalar(speed), life:hostile?2.4:CFG.BOLT_LIFE, hostile:!!hostile });
+}
+const _up = new THREE.Vector3(0,1,0);
+const _m = new THREE.Matrix4();
+function quatFromDir(dir){
+  const q = new THREE.Quaternion();
+  _m.lookAt(new THREE.Vector3(0,0,0), dir.clone().negate(), _up);
+  q.setFromRotationMatrix(_m);
+  return q;
+}
+
+/* ---- power-ups ---- */
+function dropPickup(posn){
+  if(Math.random() > CFG.DROP_CHANCE) return;
+  const kinds = [PU.RAPID, PU.TRIPLE, PU.SHIELD, PU.LIFE];
+  const weights = [0.34, 0.30, 0.24, 0.12];
+  let r = Math.random(), kind = kinds[0];
+  for(let i=0;i<kinds.length;i++){ if((r-=weights[i])<=0){ kind=kinds[i]; break; } }
+  const color = kind===PU.RAPID?0x45e0ff : kind===PU.TRIPLE?0xffb02e : kind===PU.SHIELD?0x7cff9b : 0xff3b5c;
+  const grp = new THREE.Group();
+  const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.7,0), new THREE.MeshBasicMaterial({color, fog:false}));
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.05,0.08,8,20), new THREE.MeshBasicMaterial({color, transparent:true, opacity:0.6, fog:false}));
+  grp.add(core, ring);
+  grp.position.copy(posn);
+  scene.add(grp);
+  pickups.push({ mesh:grp, kind, spin:0, ring });
+}
+
+/* ---- explosion particles ---- */
+function explode(posn, color, n, spread){
+  n = n||20; spread = spread||14;
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(n*3);
+  const vels = [];
+  for(let i=0;i<n;i++){
+    pos[i*3]=posn.x; pos[i*3+1]=posn.y; pos[i*3+2]=posn.z;
+    vels.push(new THREE.Vector3(Math.random()-0.5,Math.random()-0.5,Math.random()-0.5).normalize().multiplyScalar(spread*(0.4+Math.random())));
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color, size:0.5, transparent:true, fog:false }));
+  scene.add(pts);
+  fx.push({ pts, vels, life:0.7, max:0.7 });
+}
+
+/* ============================================================
+   VR COMFORT VIGNETTE  (mesh fixed in front of headset camera)
+   ============================================================ */
+let vrVignette = null;
+(function(){
+  const c = document.createElement('canvas'); c.width=c.height=256;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(128,128,40,128,128,128);
+  g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(0.55,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(0,0,0,1)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,256,256);
+  const tex = new THREE.CanvasTexture(c);
+  const mat = new THREE.MeshBasicMaterial({ map:tex, transparent:true, depthTest:false, depthWrite:false, opacity:0 });
+  vrVignette = new THREE.Mesh(new THREE.PlaneGeometry(2.2,2.2), mat);
+  vrVignette.position.set(0,0,-1); // 1 unit in front of camera
+  vrVignette.renderOrder = 999;
+  camera.add(vrVignette);
+})();
+
+/* ============================================================
+   VR WORLD-SPACE HUD PANEL (only shown in VR; DOM hud hidden then)
+   ============================================================ */
+let vrHudCanvas, vrHudCtx, vrHudTex, vrHudMesh;
+(function(){
+  vrHudCanvas = document.createElement('canvas'); vrHudCanvas.width=512; vrHudCanvas.height=128;
+  vrHudCtx = vrHudCanvas.getContext('2d');
+  vrHudTex = new THREE.CanvasTexture(vrHudCanvas);
+  vrHudMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.9,0.225),
+    new THREE.MeshBasicMaterial({ map:vrHudTex, transparent:true, depthTest:false })
+  );
+  vrHudMesh.position.set(0,-0.34,-1.1); // lower-center, fixed to head
+  vrHudMesh.renderOrder = 998;
+  vrHudMesh.visible = false;
+  camera.add(vrHudMesh);
+})();
+
+/* ---- 3D cockpit canopy (VR only): thin struts + dashboard, fixed to the head ---- */
+let cockpit3d=null;
+(function(){
+  cockpit3d = new THREE.Group();
+  const hull = new THREE.MeshPhongMaterial({ color:0x0e1622, emissive:0x06101a, shininess:50, side:THREE.DoubleSide });
+  const glow = new THREE.MeshBasicMaterial({ color:0x45e0ff, transparent:true, opacity:0.85, fog:false });
+  function strut(a, b, r, mat){
+    const A=new THREE.Vector3().fromArray(a), B=new THREE.Vector3().fromArray(b);
+    const len=A.distanceTo(B);
+    const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,8), mat);
+    m.position.copy(A).lerp(B,0.5);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), B.clone().sub(A).normalize());
+    return m;
+  }
+  // dashboard panel, tilted up toward the pilot
+  const dash=new THREE.Mesh(new THREE.BoxGeometry(1.25,0.18,0.05), hull);
+  dash.position.set(0,-0.46,-0.72); dash.rotation.x=-0.55;
+  cockpit3d.add(dash);
+  cockpit3d.add(strut([-0.6,-0.40,-0.66],[0.6,-0.40,-0.66],0.006,glow)); // dash glow edge
+  // A-pillars + glow accents
+  cockpit3d.add(strut([-0.55,-0.42,-0.70],[-0.34,0.52,-0.92],0.016,hull));
+  cockpit3d.add(strut([ 0.55,-0.42,-0.70],[ 0.34,0.52,-0.92],0.016,hull));
+  cockpit3d.add(strut([-0.55,-0.42,-0.69],[-0.34,0.52,-0.91],0.004,glow));
+  cockpit3d.add(strut([ 0.55,-0.42,-0.69],[ 0.34,0.52,-0.91],0.004,glow));
+  // top canopy rail + glow
+  cockpit3d.add(strut([-0.34,0.52,-0.92],[0.34,0.52,-0.92],0.013,hull));
+  cockpit3d.add(strut([-0.34,0.515,-0.91],[0.34,0.515,-0.91],0.004,glow));
+  // lower side struts
+  cockpit3d.add(strut([-0.60,-0.45,-0.70],[-0.62,0.10,-0.78],0.012,hull));
+  cockpit3d.add(strut([ 0.60,-0.45,-0.70],[ 0.62,0.10,-0.78],0.012,hull));
+  cockpit3d.visible=false;
+  camera.add(cockpit3d);
+})();
+
+function drawVrHud(){
+  const x=vrHudCtx;
+  x.clearRect(0,0,512,128);
+  x.fillStyle='rgba(5,10,20,0.55)'; x.fillRect(0,0,512,128);
+  x.strokeStyle='rgba(69,224,255,0.5)'; x.lineWidth=2; x.strokeRect(2,2,508,124);
+  x.textBaseline='middle';
+  x.fillStyle='#ffb02e'; x.font='22px "Share Tech Mono",monospace';
+  x.textAlign='left'; x.fillText('LVL '+level, 22, 40);
+  x.fillStyle='#eafbff'; x.font='44px "Orbitron",sans-serif';
+  x.textAlign='center'; x.fillText(String(score), 256, 66);
+  x.fillStyle='#45e0ff'; x.font='26px "Share Tech Mono",monospace';
+  x.textAlign='right'; x.fillText('♥ '+lives, 490, 40);
+  let pu = '';
+  if(shield) pu='SHIELD';
+  else if(rapidT>0) pu='RAPID '+Math.ceil(rapidT)+'s';
+  else if(tripleT>0) pu='TRIPLE '+Math.ceil(tripleT)+'s';
+  x.fillStyle='#7cff9b'; x.font='20px "Share Tech Mono",monospace';
+  x.textAlign='center'; x.fillText(pu, 256, 104);
+  vrHudTex.needsUpdate = true;
+}
+
+/* ============================================================
+   INPUT  — desktop
+   ============================================================ */
+const keys = {};
+window.addEventListener('keydown', e=>{ keys[e.code]=true; if(e.code==='Escape' && document.pointerLockElement) document.exitPointerLock(); });
+window.addEventListener('keyup',   e=>{ keys[e.code]=false; });
+
+// Desktop look + fire.
+// Pointer Lock gives smooth free-look when the environment allows it (e.g. on the
+// hosted page). Inside sandboxed iframes it's often blocked, so we fall back to
+// drag-to-look + click-to-fire, which needs no lock at all.
+let lockOK=false, lockTried=false, lmbDown=false, downT=0, dragMoved=0;
+function applyLook(dx,dy){
+  yaw   -= dx * CFG.LOOK_SENS;
+  pitch -= dy * CFG.LOOK_SENS;
+  pitch = Math.max(-Math.PI/2+0.05, Math.min(Math.PI/2-0.05, pitch));
+}
+function updateDesktopHint(){
+  const h=document.getElementById('dhint');
+  if(h) h.style.display = (state==='playing' && mode==='desktop' && !lockOK) ? 'block' : 'none';
+}
+document.addEventListener('pointerlockchange', ()=>{ lockOK=(document.pointerLockElement===renderer.domElement); updateDesktopHint(); });
+document.addEventListener('pointerlockerror',  ()=>{ lockOK=false; updateDesktopHint(); });
+
+renderer.domElement.addEventListener('mousedown', e=>{
+  if(state!=='playing' || mode!=='desktop' || e.button!==0) return;
+  e.preventDefault();
+  lmbDown=true; downT=performance.now(); dragMoved=0;
+  if(!lockOK && !lockTried){ // try to upgrade to pointer lock once; harmless if blocked
+    lockTried=true;
+    try{ const p=renderer.domElement.requestPointerLock(); if(p&&p.catch) p.catch(()=>{}); }catch(_){}
+  }
+});
+window.addEventListener('mouseup', e=>{
+  if(mode!=='desktop' || e.button!==0){ lmbDown=false; return; }
+  if(state==='playing' && !lockOK && performance.now()-downT<250 && dragMoved<6) playerFire(); // tap = fire
+  lmbDown=false;
+});
+document.addEventListener('mousemove', e=>{
+  if(state!=='playing' || mode!=='desktop') return;
+  if(lockOK){ applyLook(e.movementX, e.movementY); }
+  else if(lmbDown){ dragMoved += Math.abs(e.movementX)+Math.abs(e.movementY); applyLook(e.movementX, e.movementY); }
+});
+renderer.domElement.addEventListener('click', ()=>{
+  if(state==='playing' && mode==='desktop' && lockOK) playerFire(); // locked mode fires on click
+});
+
+/* ============================================================
+   INPUT  — touch
+   ============================================================ */
+const touch = { mx:0, my:0, up:false, dn:false };
+function bindHold(el, on, off){
+  el.addEventListener('touchstart', e=>{ e.preventDefault(); on(); }, {passive:false});
+  el.addEventListener('touchend',   e=>{ e.preventDefault(); off(); }, {passive:false});
+  el.addEventListener('touchcancel',e=>{ e.preventDefault(); off(); }, {passive:false});
+}
+(function(){
+  const stick=document.getElementById('stick'), nub=stick.querySelector('.nub');
+  let sid=null, cx=0, cy=0;
+  stick.addEventListener('touchstart', e=>{ e.preventDefault(); const t=e.changedTouches[0]; sid=t.identifier;
+    const r=stick.getBoundingClientRect(); cx=r.left+r.width/2; cy=r.top+r.height/2; }, {passive:false});
+  stick.addEventListener('touchmove', e=>{ e.preventDefault();
+    for(const t of e.changedTouches){ if(t.identifier!==sid) continue;
+      let dx=t.clientX-cx, dy=t.clientY-cy; const max=52, d=Math.hypot(dx,dy);
+      if(d>max){ dx=dx/d*max; dy=dy/d*max; }
+      nub.style.transform=`translate(${dx}px,${dy}px)`;
+      touch.mx=dx/max; touch.my=dy/max;
+    }}, {passive:false});
+  function end(e){ for(const t of e.changedTouches){ if(t.identifier===sid){ sid=null; touch.mx=touch.my=0; nub.style.transform='translate(0,0)'; } } }
+  stick.addEventListener('touchend', e=>{e.preventDefault(); end(e);}, {passive:false});
+  stick.addEventListener('touchcancel', e=>{e.preventDefault(); end(e);}, {passive:false});
+
+  const look=document.getElementById('look'); let lid=null, lx=0, ly=0;
+  look.addEventListener('touchstart', e=>{ e.preventDefault(); const t=e.changedTouches[0]; lid=t.identifier; lx=t.clientX; ly=t.clientY; }, {passive:false});
+  look.addEventListener('touchmove', e=>{ e.preventDefault();
+    for(const t of e.changedTouches){ if(t.identifier!==lid) continue;
+      yaw   -= (t.clientX-lx)*0.005;
+      pitch -= (t.clientY-ly)*0.005;
+      pitch = Math.max(-Math.PI/2+0.05, Math.min(Math.PI/2-0.05, pitch));
+      lx=t.clientX; ly=t.clientY;
+    }}, {passive:false});
+  function lend(e){ for(const t of e.changedTouches){ if(t.identifier===lid) lid=null; } }
+  look.addEventListener('touchend', e=>{e.preventDefault(); lend(e);}, {passive:false});
+  look.addEventListener('touchcancel', e=>{e.preventDefault(); lend(e);}, {passive:false});
+
+  bindHold(document.getElementById('upbtn'), ()=>touch.up=true, ()=>touch.up=false);
+  bindHold(document.getElementById('dnbtn'), ()=>touch.dn=true, ()=>touch.dn=false);
+  const fb=document.getElementById('fire');
+  fb.addEventListener('touchstart', e=>{ e.preventDefault(); if(state==='playing') playerFire(); fireHeld=true; }, {passive:false});
+  fb.addEventListener('touchend',   e=>{ e.preventDefault(); fireHeld=false; }, {passive:false});
+})();
+let fireHeld = false;
+
+/* ============================================================
+   INPUT  — VR controllers (laser pointer)
+   ============================================================ */
+let controller0=null, controller1=null;
+let leftHand=null, rightHand=null;       // resolved from inputSource handedness
+let triggerHeld=false;
+let lastSnap=0;
+let vrReticle=null, firingController=null;
+
+function makeReticle(){
+  const g = new THREE.Group();
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.45, 0.06, 8, 28),
+    new THREE.MeshBasicMaterial({ color:0x45e0ff, transparent:true, opacity:0.9, depthTest:false, fog:false })
+  );
+  const dot = new THREE.Mesh(
+    new THREE.SphereGeometry(0.11, 10, 10),
+    new THREE.MeshBasicMaterial({ color:0x9be9ff, depthTest:false, fog:false })
+  );
+  g.add(ring, dot);
+  g.position.set(0, 0, -CFG.RETICLE_DIST); // floats along the pointer's -Z
+  g.renderOrder = 997;
+  return g;
+}
+// move the reticle onto whichever controller is actively firing
+function setFiringHand(c){
+  if(!vrReticle || !c) return;
+  if(vrReticle.parent !== c) c.add(vrReticle);
+  firingController = c;
+}
+
+function buildController(i){
+  const c = renderer.xr.getController(i);
+  // laser pointer line
+  const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,-1)]);
+  const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color:0x45e0ff, transparent:true, opacity:0.8 }));
+  line.scale.z = 40;
+  c.add(line);
+  // little emitter
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.03,0.12,8), new THREE.MeshBasicMaterial({color:0x9be9ff}));
+  tip.rotation.x = -Math.PI/2; tip.position.z=-0.05; c.add(tip);
+  c.addEventListener('selectstart', ()=>{ triggerHeld=true; setFiringHand(c); if(state==='playing') vrFireFrom(c); });
+  c.addEventListener('selectend',   ()=>{ triggerHeld=false; });
+  dolly.add(c);
+  return c;
+}
+
+const _origin=new THREE.Vector3(), _dir=new THREE.Vector3(), _q=new THREE.Quaternion();
+function vrFireFrom(c){
+  c.getWorldPosition(_origin);
+  c.getWorldQuaternion(_q);
+  _dir.set(0,0,-1).applyQuaternion(_q).normalize();
+  doFire(_origin, _dir);
+}
+
+/* ============================================================
+   FIRING LOGIC (shared)
+   ============================================================ */
+let fireCdT = 0;
+function currentCooldown(){ return rapidT>0 ? CFG.RAPID_COOLDOWN : CFG.FIRE_COOLDOWN; }
+
+function playerFire(){
+  // desktop / mobile fire along camera forward
+  camera.getWorldPosition(_origin);
+  camera.getWorldDirection(_dir);
+  doFire(_origin, _dir);
+}
+function doFire(origin, dir){
+  if(fireCdT>0) return;
+  fireCdT = currentCooldown();
+  if(tripleT>0){
+    const side = new THREE.Vector3().crossVectors(dir,_up).normalize();
+    if(side.lengthSq()<0.001) side.set(1,0,0);
+    fireBolt(origin, dir, false);
+    fireBolt(origin, dir.clone().addScaledVector(side, 0.18).normalize(), false);
+    fireBolt(origin, dir.clone().addScaledVector(side,-0.18).normalize(), false);
+  } else {
+    fireBolt(origin, dir, false);
+  }
+  beep(660, 0.05, 0.05);
+}
+
+/* ============================================================
+   AUDIO (procedural, Web Audio)
+   ============================================================ */
+let AC=null;
+function audio(){ if(!AC){ try{ AC = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return AC; }
+function beep(freq, dur, vol, type){
+  const ac=audio(); if(!ac) return;
+  const o=ac.createOscillator(), g=ac.createGain();
+  o.type=type||'square'; o.frequency.value=freq;
+  g.gain.setValueAtTime(vol||0.06, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime+(dur||0.1));
+  o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime+(dur||0.1));
+}
+function boom(){
+  const ac=audio(); if(!ac) return;
+  const o=ac.createOscillator(), g=ac.createGain();
+  o.type='sawtooth'; o.frequency.setValueAtTime(180, ac.currentTime);
+  o.frequency.exponentialRampToValueAtTime(40, ac.currentTime+0.3);
+  g.gain.setValueAtTime(0.12, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime+0.3);
+  o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime+0.3);
+}
+
+/* ============================================================
+   LEVEL / LIFE / SCORE
+   ============================================================ */
+function startLevel(n){
+  level = n;
+  const count = Math.min(CFG.START_LARGE + (n-1), 11);
+  for(let i=0;i<count;i++) spawnAsteroid(0);
+  syncHud();
+}
+function addScore(p){
+  score += p;
+  if(score >= nextExtra){ lives++; nextExtra += CFG.EXTRA_LIFE_EVERY; beep(880,0.18,0.08,'triangle'); }
+  syncHud();
+}
+function loseLife(){
+  if(invuln>0 || shield){
+    if(shield){ shield=false; flash(0x7cff9b); beep(220,0.2,0.08,'sine'); syncHud(); }
+    return;
+  }
+  lives--; invuln = CFG.INVULN_TIME; flash(0xff3b5c); boom();
+  // clear immediate threats so respawn isn't instant death
+  for(let i=asteroids.length-1;i>=0;i--){
+    if(asteroids[i].mesh.position.distanceTo(dolly.position) < 16){
+      explode(asteroids[i].mesh.position, 0x6b6358, 14, 10);
+      scene.remove(asteroids[i].mesh); asteroids.splice(i,1);
+    }
+  }
+  vel.multiplyScalar(0.2);
+  syncHud();
+  if(lives<=0) endGame();
+}
+
+function destroyAsteroid(idx){
+  const a = asteroids[idx];
+  explode(a.mesh.position, 0xb7a98e, a.tier===0?26:a.tier===1?18:12, a.tier===0?16:11);
+  boom();
+  if(a.tier===0){ addScore(CFG.PTS_LARGE); splitInto(a,1,2); }
+  else if(a.tier===1){ addScore(CFG.PTS_MED); splitInto(a,2,2); }
+  else { addScore(CFG.PTS_SMALL); }
+  dropPickup(a.mesh.position);
+  scene.remove(a.mesh);
+  asteroids.splice(idx,1);
+  if(asteroids.length===0) startLevel(level+1);
+}
+function splitInto(a, tier, n){
+  for(let i=0;i<n;i++){
+    const v = a.vel.clone();
+    const jitter = new THREE.Vector3(Math.random()-0.5,Math.random()-0.5,Math.random()-0.5).normalize().multiplyScalar(3+level*0.3);
+    v.add(jitter).clampLength(0, CFG.AST_SPEED_MAX+level);
+    spawnAsteroid(tier, a.mesh.position.clone().addScaledVector(jitter,0.4), v);
+  }
+}
+
+function grantPickup(kind){
+  flash(0x45e0ff);
+  beep(990,0.12,0.07,'triangle');
+  if(kind===PU.RAPID) rapidT = CFG.PU_DURATION;
+  else if(kind===PU.TRIPLE) tripleT = CFG.PU_DURATION;
+  else if(kind===PU.SHIELD) shield = true;
+  else if(kind===PU.LIFE){ lives++; }
+  showPowerup(kind);
+  syncHud();
+}
+
+/* ============================================================
+   HUD (DOM) helpers
+   ============================================================ */
+const elScore=document.querySelector('#score .big'),
+      elLives=document.querySelector('#lives .ships'),
+      elLevel=document.getElementById('level'),
+      elPU=document.getElementById('powerup'),
+      elFlash=document.getElementById('flash'),
+      elVig=document.getElementById('vignette');
+function syncHud(){
+  elScore.textContent = score;
+  elLevel.textContent = 'LVL '+level;
+  elLives.textContent = lives>0 ? Array(lives).fill('▲').join(' ') : '—';
+}
+let puTimer=0;
+function showPowerup(txt){ elPU.textContent = txt; elPU.style.opacity=1; puTimer=1.6; }
+function flash(color){
+  const hex = '#'+color.toString(16).padStart(6,'0');
+  elFlash.style.background=hex; elFlash.style.opacity=0.5;
+  setTimeout(()=>{ elFlash.style.opacity=0; }, 90);
+}
+
+/* ============================================================
+   START / END
+   ============================================================ */
+function resetWorld(){
+  [...asteroids,...ufos,...pickups].forEach(o=>scene.remove(o.mesh));
+  bolts.forEach(b=>scene.remove(b.mesh)); fx.forEach(f=>scene.remove(f.pts));
+  asteroids.length=ufos.length=pickups.length=bolts.length=fx.length=0;
+  dolly.position.set(0,0,0); dolly.rotation.set(0,0,0);
+  vel.set(0,0,0); yaw=0; pitch=0;
+  score=0; lives=CFG.START_LIVES; level=1; nextExtra=CFG.EXTRA_LIFE_EVERY;
+  invuln=0; shield=false; rapidT=tripleT=0; fireCdT=0;
+  ufoTimer=CFG.UFO_FIRST;
+}
+
+function startGame(selected){
+  mode = selected;
+  resetWorld();
+  document.getElementById('start').classList.add('hidden');
+  document.getElementById('gameover').classList.add('hidden');
+  audio(); // unlock on user gesture
+
+  const hud=document.getElementById('hud'), touchUI=document.getElementById('touch'), exit=document.getElementById('exit');
+  hud.style.display = mode==='vr' ? 'none' : 'block';
+  document.getElementById('crosshair').style.display = (mode==='desktop'||mode==='phone') ? 'block' : 'none';
+  touchUI.style.display = mode==='phone' ? 'block' : 'none';
+  exit.style.display = mode==='phone' ? 'block' : 'none';
+  vrHudMesh.visible = mode==='vr';
+  if(cockpit3d) cockpit3d.visible = mode==='vr';
+
+  state='playing';
+  startLevel(1);
+  syncHud();
+
+  if(mode==='vr'){
+    if(!controller0){
+      controller0=buildController(0); controller1=buildController(1);
+      vrReticle=makeReticle(); setFiringHand(controller0); // default to controller 0 until a trigger pull
+    }
+    navigator.xr.requestSession('immersive-vr', { optionalFeatures:['local-floor','bounded-floor'] })
+      .then(session=>{ renderer.xr.setReferenceSpaceType('local-floor'); return renderer.xr.setSession(session); })
+      .catch(err=>{ alert('Could not start VR: '+err.message); backToMenu(); });
+  } else if(mode==='desktop'){
+    lockOK=false; lockTried=false; lmbDown=false;
+    updateDesktopHint();
+  }
+}
+function endGame(){
+  state='gameover';
+  document.getElementById('go-stats').textContent = `Score ${score} · Reached level ${level}`;
+  document.getElementById('gameover').classList.remove('hidden');
+  document.getElementById('hud').style.display='none';
+  document.getElementById('touch').style.display='none';
+  document.getElementById('exit').style.display='none';
+  if(document.pointerLockElement) document.exitPointerLock();
+  updateDesktopHint();
+}
+function backToMenu(){
+  state='start';
+  document.getElementById('start').classList.remove('hidden');
+  document.getElementById('hud').style.display='none';
+  document.getElementById('touch').style.display='none';
+  document.getElementById('exit').style.display='none';
+  updateDesktopHint();
+}
+
+document.getElementById('m-desktop').addEventListener('click', ()=>startGame('desktop'));
+document.getElementById('m-phone').addEventListener('click', ()=>startGame('phone'));
+document.getElementById('m-vr').addEventListener('click', ()=>{ if(vrSupported) startGame('vr'); });
+document.getElementById('again').addEventListener('click', ()=>startGame(mode));
+document.getElementById('exit').addEventListener('click', ()=>{ resetWorld(); backToMenu(); });
+
+renderer.xr.addEventListener('sessionend', ()=>{ if(state==='playing'){ /* keep playing on desktop fallback */ } backToMenu(); });
+
+/* detect VR support */
+let vrSupported=false;
+(function(){
+  const note=document.getElementById('vr-note'), btn=document.getElementById('m-vr');
+  if(navigator.xr && navigator.xr.isSessionSupported){
+    navigator.xr.isSessionSupported('immersive-vr').then(ok=>{
+      vrSupported=ok;
+      if(!ok){ btn.disabled=true; note.textContent='No VR headset detected on this device — Desktop and Phone are ready to go.'; }
+      else { note.textContent='Headset detected. Put it on after tapping VR.'; }
+    }).catch(()=>{ vrSupported=false; btn.disabled=true; note.textContent='WebXR unavailable here.'; });
+  } else { btn.disabled=true; note.textContent='This browser has no WebXR — open on a Quest browser for VR.'; }
+})();
+
+/* ============================================================
+   PER-FRAME UPDATE
+   ============================================================ */
+const _camDir=new THREE.Vector3(), _camRight=new THREE.Vector3(), _tmp=new THREE.Vector3();
+
+function readVrSticks(dt){
+  const session = renderer.xr.getSession();
+  if(!session) return;
+  let moveX=0, moveZ=0, vert=0, turn=0;
+  for(const src of session.inputSources){
+    if(!src.gamepad) continue;
+    const ax = src.gamepad.axes;
+    // thumbstick is usually axes[2],axes[3]
+    const sx = ax.length>=4 ? ax[2] : (ax[0]||0);
+    const sy = ax.length>=4 ? ax[3] : (ax[1]||0);
+    if(src.handedness==='left'){ moveX += dz(sx); moveZ += dz(sy); }
+    else if(src.handedness==='right'){ turn += dz(sx); vert -= dz(sy); }
+    else { moveX += dz(sx); moveZ += dz(sy); }
+  }
+  // snap turn (right stick X)
+  const now = performance.now();
+  if(Math.abs(turn)>0.7 && now-lastSnap>280){
+    dolly.rotateY(-Math.sign(turn)*THREE.MathUtils.degToRad(CFG.SNAP_TURN_DEG));
+    lastSnap=now;
+  }
+  // move relative to head facing
+  camera.getWorldDirection(_camDir); _camDir.normalize();
+  _camRight.crossVectors(_camDir,_up).normalize();
+  const acc = CFG.MOVE_ACCEL * CFG.VR_MOVE_SCALE * dt;
+  vel.addScaledVector(_camDir, -moveZ*acc);
+  vel.addScaledVector(_camRight, moveX*acc);
+  vel.addScaledVector(_up, vert*acc);
+  if(triggerHeld && state==='playing'){
+    // hold-to-fire from the firing hand (the one carrying the reticle)
+    const c = firingController || controller0;
+    if(c){ vrFireFrom(c); }
+  }
+}
+function dz(v){ return Math.abs(v)<0.12?0:v; }
+
+function updatePlayer(dt){
+  if(mode==='desktop' || mode==='phone'){
+    // apply look
+    dolly.rotation.set(0,0,0);
+    dolly.rotateY(yaw);
+    camera.rotation.set(pitch,0,0);
+    camera.getWorldDirection(_camDir); _camDir.normalize();
+    _camRight.crossVectors(_camDir,_up).normalize();
+    const acc = CFG.MOVE_ACCEL*dt;
+    let fz=0, fx2=0, fy=0;
+    if(mode==='desktop'){
+      if(keys['KeyW']) fz+=1; if(keys['KeyS']) fz-=1;
+      if(keys['KeyD']) fx2+=1; if(keys['KeyA']) fx2-=1;
+      if(keys['Space']) fy+=1; if(keys['ControlLeft']||keys['ControlRight']) fy-=1;
+      if(keys['ShiftLeft']) fy+=1;
+    } else {
+      fx2 = touch.mx; fz = -touch.my;
+      if(touch.up) fy+=1; if(touch.dn) fy-=1;
+    }
+    vel.addScaledVector(_camDir, fz*acc);
+    vel.addScaledVector(_camRight, fx2*acc);
+    vel.addScaledVector(_up, fy*acc);
+    if(mode==='phone' && fireHeld && state==='playing') playerFire();
+  } else if(mode==='vr'){
+    readVrSticks(dt);
+  }
+  // clamp + drag + integrate
+  const dragF = Math.pow(CFG.DRAG, dt*60);
+  vel.multiplyScalar(dragF);
+  vel.clampLength(0, CFG.MOVE_MAX);
+  dolly.position.addScaledVector(vel, dt);
+  moveSpeedDisplay = vel.length();
+
+  // wrap the player inside the play cube
+  ['x','y','z'].forEach(ax=>{
+    if(dolly.position[ax] >  CFG.BOUND) dolly.position[ax] -= CFG.BOUND*2;
+    if(dolly.position[ax] < -CFG.BOUND) dolly.position[ax] += CFG.BOUND*2;
+  });
+
+  // comfort vignette tighten with speed (VR mesh + desktop dom)
+  const t = Math.min(1, moveSpeedDisplay/CFG.MOVE_MAX);
+  if(mode==='vr'){ vrVignette.material.opacity = 0.15 + t*0.55; }
+  else if(mode==='desktop'){ elVig.style.opacity = (t*0.5).toFixed(2); }
+}
+
+function wrapObj(p){
+  const c = dolly.position;
+  ['x','y','z'].forEach(ax=>{
+    if(p[ax]-c[ax] >  CFG.BOUND) p[ax] -= CFG.BOUND*2;
+    if(p[ax]-c[ax] < -CFG.BOUND) p[ax] += CFG.BOUND*2;
+  });
+}
+
+function updateAsteroids(dt){
+  for(const a of asteroids){
+    a.mesh.position.addScaledVector(a.vel, dt);
+    a.mesh.rotation.x += a.rot.x*dt; a.mesh.rotation.y += a.rot.y*dt; a.mesh.rotation.z += a.rot.z*dt;
+    wrapObj(a.mesh.position);
+  }
+  // collide with player
+  if(invuln<=0){
+    for(let i=asteroids.length-1;i>=0;i--){
+      if(asteroids[i].mesh.position.distanceTo(dolly.position) < asteroids[i].radius + CFG.PLAYER_R){
+        if(shield){ shield=false; flash(0x7cff9b); explode(asteroids[i].mesh.position,0x7cff9b,16,12);
+          scene.remove(asteroids[i].mesh); asteroids.splice(i,1); syncHud(); }
+        else loseLife();
+        break;
+      }
+    }
+  }
+}
+
+function updateBolts(dt){
+  for(let i=bolts.length-1;i>=0;i--){
+    const b=bolts[i];
+    b.mesh.position.addScaledVector(b.vel, dt);
+    b.life-=dt;
+    let dead = b.life<=0;
+    if(!dead && !b.hostile){
+      for(let j=asteroids.length-1;j>=0;j--){
+        if(b.mesh.position.distanceTo(asteroids[j].mesh.position) < asteroids[j].radius+0.4){ destroyAsteroid(j); dead=true; break; }
+      }
+      if(!dead){
+        for(let k=ufos.length-1;k>=0;k--){
+          if(b.mesh.position.distanceTo(ufos[k].mesh.position) < 2.4){
+            explode(ufos[k].mesh.position,0xffb02e,28,18); boom();
+            addScore(CFG.PTS_UFO); dropPickup(ufos[k].mesh.position);
+            scene.remove(ufos[k].mesh); ufos.splice(k,1); dead=true; break;
+          }
+        }
+      }
+    } else if(!dead && b.hostile){
+      if(b.mesh.position.distanceTo(dolly.position) < CFG.PLAYER_R+0.8){ loseLife(); dead=true; }
+    }
+    if(dead){ scene.remove(b.mesh); bolts.splice(i,1); }
+  }
+}
+
+function updateUfos(dt){
+  ufoTimer -= dt;
+  if(ufoTimer<=0 && ufos.length===0 && state==='playing'){
+    makeUfo();
+    ufoTimer = CFG.UFO_EVERY[0] + Math.random()*(CFG.UFO_EVERY[1]-CFG.UFO_EVERY[0]);
+    beep(140,0.4,0.05,'sawtooth');
+  }
+  for(let i=ufos.length-1;i>=0;i--){
+    const u=ufos[i];
+    u.weave += dt*1.5;
+    u.mesh.position.addScaledVector(u.vel, dt);
+    u.mesh.position.y += Math.sin(u.weave)*dt*3;
+    u.mesh.rotation.y += dt*1.2;
+    // re-aim slowly toward player so it stays a threat
+    _tmp.copy(dolly.position).sub(u.mesh.position);
+    if(_tmp.length()>CFG.BOUND){ // wandered off — despawn
+      scene.remove(u.mesh); ufos.splice(i,1); continue;
+    }
+    u.vel.lerp(_tmp.normalize().multiplyScalar(CFG.UFO_SPEED), 0.01);
+    u.fireT -= dt;
+    if(u.fireT<=0){
+      u.fireT = CFG.UFO_FIRE_EVERY;
+      const dir = dolly.position.clone().sub(u.mesh.position).normalize();
+      dir.add(new THREE.Vector3((Math.random()-0.5)*0.2,(Math.random()-0.5)*0.2,(Math.random()-0.5)*0.2)).normalize();
+      fireBolt(u.mesh.position.clone(), dir, true);
+      beep(300,0.12,0.05,'square');
+    }
+  }
+}
+
+function updatePickups(dt){
+  for(let i=pickups.length-1;i>=0;i--){
+    const p=pickups[i];
+    p.spin += dt;
+    p.mesh.rotation.y = p.spin*1.6;
+    p.ring.rotation.x = p.spin*1.1;
+    if(p.mesh.position.distanceTo(dolly.position) < CFG.PU_PICKUP_R){
+      grantPickup(p.kind);
+      scene.remove(p.mesh); pickups.splice(i,1);
+    }
+  }
+}
+
+function updateFx(dt){
+  for(let i=fx.length-1;i>=0;i--){
+    const f=fx[i]; f.life-=dt;
+    const pos=f.pts.geometry.attributes.position;
+    for(let j=0;j<f.vels.length;j++){
+      pos.setXYZ(j, pos.getX(j)+f.vels[j].x*dt, pos.getY(j)+f.vels[j].y*dt, pos.getZ(j)+f.vels[j].z*dt);
+    }
+    pos.needsUpdate=true;
+    f.pts.material.opacity = Math.max(0, f.life/f.max);
+    if(f.life<=0){ scene.remove(f.pts); fx.splice(i,1); }
+  }
+}
+
+function tick(dt){
+  if(state!=='playing'){
+    // idle drift of menu starfield handled by render only
+    return;
+  }
+  if(fireCdT>0) fireCdT-=dt;
+  if(invuln>0){ invuln-=dt; }
+  if(rapidT>0){ rapidT-=dt; if(rapidT<=0) syncHud(); }
+  if(tripleT>0){ tripleT-=dt; if(tripleT<=0) syncHud(); }
+  if(puTimer>0){ puTimer-=dt; if(puTimer<=0) elPU.style.opacity=0; }
+
+  updatePlayer(dt);
+  updateAsteroids(dt);
+  updateUfos(dt);
+  updateBolts(dt);
+  updatePickups(dt);
+  updateFx(dt);
+
+  // blink ship while invulnerable (visual cue via vignette pulse)
+  if(mode==='vr') drawVrHud();
+}
+
+/* ============================================================
+   RENDER LOOP  (setAnimationLoop required for WebXR)
+   ============================================================ */
+renderer.setAnimationLoop(()=>{
+  const dt = Math.min(clock.getDelta(), 0.05);
+  tick(dt);
+  renderer.render(scene, camera);
+});
+
+window.addEventListener('resize', ()=>{
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// give the menu a slow ambient camera so it isn't dead-static
+dolly.position.set(0,0,0);
+
+})();
+</script>
+</body>
+</html>

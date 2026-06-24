@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Canyon Runner</title>
+<link href="https://fonts.googleapis.com/css2?family=Rye&family=Special+Elite&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --ink:#2a1408; --parch:#f0dca8; --parch2:#e3c587;
+    --gold:#e0a93b; --rust:#b5532a; --rust2:#8a3b22; --dusk:#1a2238;
+    --steel:#4a8fb0;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html,body{ width:100%; height:100%; overflow:hidden; background:#0c0a10; font-family:'Special Elite',monospace; color:var(--parch); }
+  #app{ position:fixed; inset:0; }
+  canvas{ display:block; }
+
+  /* ---------- shared panel look (wanted-poster / saloon) ---------- */
+  .poster{
+    background:
+      radial-gradient(120% 140% at 50% -20%, rgba(255,255,255,.10), transparent 60%),
+      linear-gradient(180deg,#f3e2b4,#e6cd92 70%,#d9bd7c);
+    color:var(--ink);
+    border:3px solid #3a2412;
+    box-shadow:0 0 0 6px rgba(58,36,18,.25), 0 18px 50px rgba(0,0,0,.6);
+    border-radius:4px;
+  }
+  .rye{ font-family:'Rye',serif; letter-spacing:.5px; }
+
+  /* ---------- start / over overlays ---------- */
+  .overlay{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    padding:20px; z-index:30; background:radial-gradient(140% 100% at 50% 30%, rgba(20,8,4,.35), rgba(8,4,2,.82));
+  }
+  .card{ width:min(560px,94vw); padding:26px 26px 22px; text-align:center; }
+  .card h1{ font-size:clamp(34px,9vw,62px); line-height:.95; color:var(--rust2); text-shadow:1px 1px 0 #d9bd7c; }
+  .card .sub{ margin-top:6px; font-size:13px; letter-spacing:3px; text-transform:uppercase; color:#5a3a1c; }
+  .rule{ height:3px; margin:16px auto; width:70%; background:repeating-linear-gradient(90deg,#3a2412 0 14px,transparent 14px 20px); }
+  .card p{ font-size:14px; line-height:1.5; color:#3c240f; }
+  .keys{ display:flex; flex-wrap:wrap; gap:8px 14px; justify-content:center; margin:14px 0 4px; font-size:12.5px; color:#3c240f; }
+  .keys b{ font-family:'Rye',serif; background:#3a2412; color:var(--parch); padding:2px 8px; border-radius:3px; font-weight:400; }
+  .btn{
+    font-family:'Rye',serif; font-size:20px; cursor:pointer; user-select:none;
+    margin:16px 8px 4px; padding:12px 26px; border:3px solid #3a2412; border-radius:5px;
+    background:linear-gradient(180deg,#caa14a,#a9772b); color:#241204;
+    box-shadow:0 4px 0 #5a3a14, 0 8px 16px rgba(0,0,0,.4); transition:transform .06s, box-shadow .06s;
+  }
+  .btn:active{ transform:translateY(3px); box-shadow:0 1px 0 #5a3a14, 0 4px 10px rgba(0,0,0,.4); }
+  .btn.vr{ background:linear-gradient(180deg,#6fb0cf,#3d7fa0); color:#06222f; box-shadow:0 4px 0 #244c5e,0 8px 16px rgba(0,0,0,.4); }
+  .btn[disabled]{ opacity:.45; cursor:default; }
+  .stat-big{ font-family:'Rye',serif; font-size:46px; color:var(--rust2); }
+  .hidden{ display:none !important; }
+
+  /* ---------- in-run HUD (desktop/mobile) ---------- */
+  #hud{ position:absolute; inset:0; pointer-events:none; z-index:20; }
+  #topbar{ position:absolute; top:10px; left:0; right:0; display:flex; justify-content:space-between; align-items:flex-start; padding:0 14px; }
+  .gauge{ padding:8px 12px 9px; min-width:108px; }
+  .gauge .lbl{ font-size:10px; letter-spacing:2px; text-transform:uppercase; color:#5a3a1c; }
+  .gauge .val{ font-family:'Rye',serif; font-size:22px; color:var(--rust2); line-height:1.1; }
+  .gauge.gold .val{ color:#9a6a12; }
+  #healthwrap{ display:flex; gap:5px; margin-top:3px; }
+  .pip{ width:16px; height:16px; border:2px solid #3a2412; border-radius:3px 3px 4px 4px; background:#caa; box-shadow:inset 0 -3px 0 rgba(0,0,0,.18); }
+  .pip.full{ background:linear-gradient(180deg,#e25a3a,#a83018); }
+  .pip.empty{ background:#cdbb95; }
+
+  /* throttle bar */
+  #throttlewrap{ position:absolute; left:14px; bottom:16px; width:46px; height:160px; padding:8px 6px; display:flex; flex-direction:column; align-items:center; gap:6px; }
+  #throttlewrap .lbl{ font-size:9px; letter-spacing:1px; color:#5a3a1c; }
+  #throttletrack{ position:relative; flex:1; width:18px; background:#cdbb95; border:2px solid #3a2412; border-radius:9px; overflow:hidden; }
+  #throttlefill{ position:absolute; left:0; right:0; bottom:0; height:30%; background:linear-gradient(180deg,#e0a93b,#b5532a); }
+
+  /* center reticle */
+  #reticle{ position:absolute; left:50%; top:50%; width:34px; height:34px; transform:translate(-50%,-50%); z-index:21; pointer-events:none; }
+  #reticle svg{ width:100%; height:100%; filter:drop-shadow(0 0 3px rgba(0,0,0,.6)); }
+
+  /* mobile controls */
+  #touch{ position:absolute; inset:0; z-index:22; display:none; }
+  .tbtn{
+    position:absolute; pointer-events:auto; width:74px; height:74px; border-radius:50%;
+    border:3px solid #3a2412; background:radial-gradient(circle at 38% 32%, #e3c587, #b88a3e);
+    color:#241204; font-family:'Rye',serif; font-size:13px; display:flex; align-items:center; justify-content:center;
+    box-shadow:0 4px 12px rgba(0,0,0,.5); user-select:none; touch-action:none;
+  }
+  .tbtn:active{ filter:brightness(1.15); }
+  #t-left{ left:16px; bottom:96px; } #t-right{ left:104px; bottom:96px; }
+  #t-up{ right:104px; bottom:150px; width:64px; height:64px; } #t-down{ right:104px; bottom:74px; width:64px; height:64px; }
+  #t-fire{ right:16px; bottom:96px; width:92px; height:92px; background:radial-gradient(circle at 38% 32%,#e88,#b5231f); color:#fff; border-color:#5a120f; }
+
+  #flash{ position:absolute; inset:0; background:#fff; opacity:0; z-index:15; pointer-events:none; }
+  #vig{ position:absolute; inset:0; z-index:14; pointer-events:none; opacity:0;
+        box-shadow:inset 0 0 120px 60px rgba(20,6,2,.9); }
+  #msg{ position:absolute; left:50%; top:24%; transform:translateX(-50%); z-index:23; pointer-events:none;
+        font-family:'Rye',serif; font-size:30px; color:var(--gold); text-shadow:0 2px 6px rgba(0,0,0,.8); opacity:0; }
+
+  /* ammo / six-shooter */
+  #ammowrap{ position:absolute; left:50%; bottom:16px; transform:translateX(-50%); padding:8px 12px 9px; text-align:center; }
+  #ammowrap .lbl{ font-size:10px; letter-spacing:2px; text-transform:uppercase; color:#5a3a1c; margin-bottom:4px; }
+  #shells{ display:flex; gap:5px; justify-content:center; }
+  .shell{ width:9px; height:20px; border:2px solid #3a2412; border-radius:3px 3px 5px 5px; background:linear-gradient(180deg,#e7b24a 0 6px,#b5532a 6px); }
+  .shell.spent{ background:#cdbb95; box-shadow:none; }
+  #reloadbar{ position:relative; height:7px; margin-top:6px; width:100%; background:#cdbb95; border:2px solid #3a2412; border-radius:5px; overflow:hidden; display:none; }
+  #reloadfill{ position:absolute; left:0; top:0; bottom:0; width:0%; background:linear-gradient(90deg,#b5532a,#e0a93b); }
+  #ammowrap.reloading .lbl{ color:#9a3a1c; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<!-- center reticle -->
+<div id="reticle" class="hidden">
+  <svg viewBox="0 0 34 34"><g fill="none" stroke="#f0dca8" stroke-width="2">
+    <circle cx="17" cy="17" r="11"/><line x1="17" y1="0" x2="17" y2="7"/><line x1="17" y1="27" x2="17" y2="34"/>
+    <line x1="0" y1="17" x2="7" y2="17"/><line x1="27" y1="17" x2="34" y2="17"/></g>
+    <circle cx="17" cy="17" r="1.6" fill="#b5231f"/></svg>
+</div>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div id="topbar">
+    <div class="gauge poster">
+      <div class="lbl">Distance</div><div class="val"><span id="dist">0</span> ft</div>
+    </div>
+    <div class="gauge poster" style="text-align:center">
+      <div class="lbl">Cart</div>
+      <div id="healthwrap"></div>
+    </div>
+    <div class="gauge gold poster" style="text-align:right">
+      <div class="lbl">Gold</div><div class="val">$<span id="gold">0</span></div>
+    </div>
+  </div>
+  <div id="throttlewrap" class="poster">
+    <div class="lbl">FAST</div>
+    <div id="throttletrack"><div id="throttlefill"></div></div>
+    <div class="lbl">SLOW</div>
+  </div>
+  <div id="msg"></div>
+  <div id="ammowrap" class="poster">
+    <div class="lbl" id="ammolbl">Cylinder</div>
+    <div id="shells"></div>
+    <div id="reloadbar"><div id="reloadfill"></div></div>
+  </div>
+  <div id="vig"></div>
+  <div id="flash"></div>
+
+  <div id="touch">
+    <div class="tbtn" id="t-left">◀</div>
+    <div class="tbtn" id="t-right">▶</div>
+    <div class="tbtn" id="t-up">FAST</div>
+    <div class="tbtn" id="t-down">SLOW</div>
+    <div class="tbtn" id="t-fire">FIRE</div>
+  </div>
+</div>
+
+<!-- START -->
+<div id="start" class="overlay">
+  <div class="card poster">
+    <h1 class="rye">Canyon&nbsp;Runner</h1>
+    <div class="sub">Dad's VR Games &middot; No. 2</div>
+    <div class="rule"></div>
+    <p>A runaway ore cart tears down a bottomless desert canyon. Work the throttle, lean off the rotten boulders and tumbleweeds, blast the dynamite before it blasts you, and grab every glint of gold. Keep her on the rails as long as you dare.</p>
+    <div class="keys" id="keyhints"></div>
+    <button class="btn" id="play">Ride</button>
+    <button class="btn vr" id="vrbtn" disabled>VR</button>
+  </div>
+</div>
+
+<!-- GAME OVER -->
+<div id="over" class="overlay hidden">
+  <div class="card poster">
+    <h1 class="rye" style="font-size:clamp(30px,8vw,52px)">Derailed!</h1>
+    <div class="rule"></div>
+    <p style="margin-bottom:6px">You rode</p>
+    <div class="stat-big"><span id="o-dist">0</span> ft</div>
+    <p style="margin:10px 0 2px">and panned</p>
+    <div class="stat-big" style="color:#9a6a12">$<span id="o-gold">0</span></div>
+    <p id="o-best" style="margin-top:12px; font-size:12px; letter-spacing:1px; color:#5a3a1c"></p>
+    <button class="btn" id="again">Ride Again</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* =========================================================================
+   CANYON RUNNER  (CR-1)  —  western mine-cart rail runner
+   Single file · Three.js r128 · WebXR · Desktop / Mobile / VR
+   All tunables live in CFG.
+   ========================================================================= */
+const CFG = {
+  segLen:        4,        // world units between track points
+  trackHalfW:    3.0,      // lateral room the cart has on the rails
+  laneLerp:      7.0,      // how snappy lateral steering is
+  speedMin:      15.4,     // units/sec at full SLOW  (+10%)
+  speedMax:      50.6,     // units/sec at full FAST  (+10%)
+  throttleRate:  0.9,      // how fast throttle slides (per sec)
+  turnRate:      0.55,     // canyon curviness
+  pitchRate:     0.22,     // gentle rise/fall of the rails
+  chunkSegs:     24,       // track points per built mesh chunk
+  chunksAhead:   6,
+  chunksBehind:  2,
+  spawnEveryMin: 10,       // distance (units) between hazard rolls
+  spawnEveryMax: 22,
+  hitRadius:     1.5,
+  goldMagnet:    2.2,
+  maxHealth:     5,
+  dmgHit:        1,
+  fireCooldown:  0.28,
+  magSize:       6,        // six-shooter cylinder
+  reloadTime:    5.0,      // seconds to refill once emptied
+  bulletSpeed:   140,
+  comfortSpeedForVig: 33,  // vignette starts tightening past this speed
+};
+
+// ---- core three.js ----
+let scene, camera, renderer, clock;
+let sunLight, hemi;
+const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
+const UP = new THREE.Vector3(0,1,0);
+
+// ---- track ----
+const pathPts = [];      // THREE.Vector3, absolute world positions of rail centerline
+const pathUp  = [];      // up vector per point (for banking walls/rails)
+let genHeading = 0, genPitch = 0, genTurnGoal = 0, genPitchGoal = 0;
+let builtTo = 0;         // index up to which we've generated points
+const chunks = [];       // {start,end,group}
+
+// ---- player / cart ----
+let dolly, cart, cartTiltZ = 0;
+const player = { dist: 12, speed: 22, throttle: 0.3, lane: 0, targetLane: 0,
+                 health: CFG.maxHealth, gold: 0, alive: false,
+                 ammo: CFG.magSize, reloading: false, reloadTimer: 0 };
+
+// ---- entities ----
+const entities = []; // {type, mesh, dist, lane, dead, ...}
+let nextSpawnDist = 60;
+
+// ---- weapon ----
+let reticleEl, fireTimer = 0;
+const bullets = []; // visual tracers {mesh, life}
+const raycaster = new THREE.Raycaster();
+
+// ---- input ----
+const keys = {};
+let mouseNDC = new THREE.Vector2(0,0);
+let isTouch = false;
+const touchState = { left:false, right:false, up:false, down:false };
+
+// ---- VR ----
+let controller0, controller1, fireHand = null;
+let xrLaser, xrReticle;
+let vrHud, vrHudCanvas, vrHudCtx, vrHudTex;
+let inVR = false;
+
+// ---- dom ----
+const $ = id => document.getElementById(id);
+let best = 0;
+
+/* ============================ INIT ============================ */
+function init(){
+  scene = new THREE.Scene();
+
+  // dusk gradient sky via large back-side sphere (fog:false so it never washes out)
+  const skyGeo = new THREE.SphereGeometry(900, 32, 16);
+  const skyMat = new THREE.ShaderMaterial({
+    side: THREE.BackSide, fog:false, depthWrite:false,
+    uniforms:{ top:{value:new THREE.Color(0x1a2238)}, mid:{value:new THREE.Color(0xc14a25)}, bot:{value:new THREE.Color(0xe8a04a)} },
+    vertexShader:`varying float h; void main(){ h=normalize(position).y; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+    fragmentShader:`varying float h; uniform vec3 top; uniform vec3 mid; uniform vec3 bot;
+      void main(){ float t=clamp(h,-1.0,1.0);
+        vec3 c = t>0.0 ? mix(mid,top,pow(t,0.7)) : mix(mid,bot,pow(-t,0.5));
+        gl_FragColor=vec4(c,1.0);} `
+  });
+  scene.add(new THREE.Mesh(skyGeo, skyMat));
+
+  // a low sun glow billboard
+  const sun = new THREE.Mesh(new THREE.CircleGeometry(60,32),
+              new THREE.MeshBasicMaterial({color:0xffe0a0, fog:false, transparent:true, opacity:.9}));
+  sun.position.set(-120,40,-520); scene.add(sun);
+  const sunGlow = new THREE.Mesh(new THREE.CircleGeometry(120,32),
+              new THREE.MeshBasicMaterial({color:0xff9a4a, fog:false, transparent:true, opacity:.28}));
+  sunGlow.position.copy(sun.position); sunGlow.position.z -= 1; scene.add(sunGlow);
+
+  scene.fog = new THREE.Fog(0xd98a4a, 60, 360);
+
+  hemi = new THREE.HemisphereLight(0xffe6c2, 0x4a2a1a, 0.85); scene.add(hemi);
+  sunLight = new THREE.DirectionalLight(0xffd9a0, 1.0);
+  sunLight.position.set(-1,1.4,-2); scene.add(sunLight);
+  scene.add(new THREE.AmbientLight(0x55402e, 0.5));
+
+  renderer = new THREE.WebGLRenderer({ antialias:true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.xr.enabled = true;
+  $('app').appendChild(renderer.domElement);
+
+  camera = new THREE.PerspectiveCamera(72, window.innerWidth/window.innerHeight, 0.1, 1100);
+
+  // dolly rig: headset / camera live inside this; we move the rig along the rails
+  dolly = new THREE.Group();
+  dolly.add(camera);
+  scene.add(dolly);
+
+  buildCart();
+  buildVRControllers();
+  buildVRHud();
+
+  reticleEl = $('reticle');
+  clock = new THREE.Clock();
+
+  // seed the path
+  pathPts.push(new THREE.Vector3(0,0,0));
+  pathUp.push(UP.clone());
+  ensurePath(200);
+  rebuildChunks(0);
+
+  bindInput();
+  setupKeyHints();
+  detectVR();
+
+  window.addEventListener('resize', onResize);
+  renderer.setAnimationLoop(loop);
+}
+
+/* ============================ CART ============================ */
+function buildCart(){
+  cart = new THREE.Group();
+  const wood = new THREE.MeshPhongMaterial({color:0x6e4326, flatShading:true});
+  const ironM = new THREE.MeshPhongMaterial({color:0x39312e, flatShading:true, shininess:60});
+  const rust = new THREE.MeshPhongMaterial({color:0x7a3a22, flatShading:true});
+
+  // body (open-top box)
+  const w=1.5,h=0.9,d=2.0,t=0.12;
+  const panels=[[w,h,t,0,0,d/2],[w,h,t,0,0,-d/2],[t,h,d,w/2,0,0],[t,h,d,-w/2,0,0],[w,t,d,0,-h/2,0]];
+  for(const [pw,ph,pd,px,py,pz] of panels){
+    const m=new THREE.Mesh(new THREE.BoxGeometry(pw,ph,pd), pz!==0?rust:wood);
+    m.position.set(px,py,pz); cart.add(m);
+  }
+  // iron rim
+  const rim=new THREE.Mesh(new THREE.BoxGeometry(w+0.12,0.12,d+0.12), ironM);
+  rim.position.y=h/2; cart.add(rim);
+  // wheels
+  const wg=new THREE.CylinderGeometry(0.42,0.42,0.16,16);
+  for(const sx of [-1,1]) for(const sz of [-1,1]){
+    const wmesh=new THREE.Mesh(wg, ironM); wmesh.rotation.z=Math.PI/2;
+    wmesh.position.set(sx*(w/2+0.02), -h/2-0.18, sz*0.62); cart.add(wmesh);
+  }
+  cart.position.y = 0.88; // sit above rail
+  cart.scale.setScalar(0.72); // smaller cart = more of the track visible ahead
+  dolly.add(cart);
+
+  // seat the camera inside, looking forward (first-person, cart rim as comfort frame)
+  camera.position.set(0, 1.55, 0.35);
+}
+
+/* ====================== PROCEDURAL TRACK ====================== */
+function ensurePath(toIndex){
+  while(pathPts.length <= toIndex){
+    // wander heading & pitch toward goals, occasionally pick new goals
+    if(Math.random()<0.04){ genTurnGoal = (Math.random()*2-1)*CFG.turnRate; }
+    if(Math.random()<0.05){ genPitchGoal = (Math.random()*2-1)*CFG.pitchRate; }
+    genHeading += (genTurnGoal - genHeading)*0.08 + (Math.random()-0.5)*0.01;
+    genPitch  += (genPitchGoal - genPitch)*0.06;
+    genPitch = Math.max(-0.18, Math.min(0.18, genPitch));
+    const prev = pathPts[pathPts.length-1];
+    const dir = new THREE.Vector3(Math.sin(genHeading)*Math.cos(genPitch), Math.sin(genPitch), -Math.cos(genHeading)*Math.cos(genPitch));
+    const np = prev.clone().addScaledVector(dir, CFG.segLen);
+    pathPts.push(np);
+    pathUp.push(UP.clone());
+  }
+}
+
+// position & frame at a continuous distance s (world units from path start)
+function sampleTrack(s, outPos, outTan, outRight){
+  const f = s / CFG.segLen;
+  let i = Math.floor(f);
+  if(i<0) i=0;
+  ensurePath(i+2);
+  const a = pathPts[i], b = pathPts[i+1];
+  const lt = f - i;
+  outPos.lerpVectors(a,b,lt);
+  outTan.subVectors(b,a).normalize();
+  outRight.crossVectors(outTan, UP).normalize();
+  return i;
+}
+
+// build visual rails+ties+walls in chunks; recycle far ones
+function rebuildChunks(centerIdx){
+  const startChunk = Math.max(0, Math.floor(centerIdx/CFG.chunkSegs) - CFG.chunksBehind);
+  const endChunk   = Math.floor(centerIdx/CFG.chunkSegs) + CFG.chunksAhead;
+  // dispose chunks out of range
+  for(let c=chunks.length-1;c>=0;c--){
+    const ch=chunks[c];
+    if(ch.idx < startChunk || ch.idx > endChunk){
+      scene.remove(ch.group); disposeGroup(ch.group); chunks.splice(c,1);
+    }
+  }
+  for(let ci=startChunk; ci<=endChunk; ci++){
+    if(chunks.some(ch=>ch.idx===ci)) continue;
+    chunks.push(buildChunk(ci));
+  }
+}
+
+const RAIL_MAT = new THREE.MeshPhongMaterial({color:0x44403c, shininess:80, flatShading:true});
+const TIE_MAT  = new THREE.MeshPhongMaterial({color:0x4a3120, flatShading:true});
+
+function buildChunk(idx){
+  const group = new THREE.Group();
+  const i0 = idx*CFG.chunkSegs, i1 = i0+CFG.chunkSegs;
+  ensurePath(i1+2);
+
+  // rails + ties
+  const railOff = 0.6;
+  const pos=new THREE.Vector3(), tan=new THREE.Vector3(), right=new THREE.Vector3();
+  const leftPts=[], rightPts=[];
+  for(let i=i0;i<=i1;i++){
+    const s=i*CFG.segLen; sampleTrack(s,pos,tan,right);
+    leftPts.push(pos.clone().addScaledVector(right,-railOff).setY(pos.y+0.16));
+    rightPts.push(pos.clone().addScaledVector(right, railOff).setY(pos.y+0.16));
+    if(i<i1){ // skip seam tie (next chunk builds it) to avoid z-fighting duplicates
+      const tie=new THREE.Mesh(new THREE.BoxGeometry(1.7,0.1,0.32), TIE_MAT);
+      tie.position.copy(pos).setY(pos.y+0.06);
+      tie.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,-1), tan);
+      group.add(tie);
+    }
+  }
+  group.add(tubeFromPoints(leftPts,0.07,RAIL_MAT));
+  group.add(tubeFromPoints(rightPts,0.07,RAIL_MAT));
+
+  // canyon walls (banded ribbons L & R) + occasional rock arch / cactus
+  group.add(buildWall(i0,i1,-1));
+  group.add(buildWall(i0,i1, 1));
+  buildScatter(group, i0, i1);
+
+  scene.add(group);
+  return {idx, group, start:i0, end:i1};
+}
+
+function tubeFromPoints(pts, r, mat){
+  const curve=new THREE.CatmullRomCurve3(pts);
+  const geo=new THREE.TubeGeometry(curve, pts.length*2, r, 6, false);
+  return new THREE.Mesh(geo, mat);
+}
+
+const BANDS = [0x8a3b22,0xa85a30,0xc47a45,0x6e2d1c,0xd99a5e,0x9c4a28];
+function buildWall(i0,i1,side){
+  const pos=new THREE.Vector3(), tan=new THREE.Vector3(), right=new THREE.Vector3();
+  const verts=[], colors=[], idxs=[];
+  const layers=7;
+  const base   = CFG.trackHalfW + 3.6; // base of cliff sits safely clear of the rails
+  const batter = 3.4;                  // cliff recedes OUTWARD as it rises -> no overhang, no self-crossing on curves
+  const wallH  = 26;
+  let row=0;
+  for(let i=i0;i<=i1;i++){
+    const s=i*CFG.segLen; sampleTrack(s,pos,tan,right);
+    // smooth, low-frequency ridge: depends on i only, so the base never folds through itself on tight turns
+    const ridge = base + Math.sin(i*0.12 + side*2.0)*1.8 + Math.sin(i*0.29 + side)*0.8;
+    for(let L=0;L<=layers;L++){
+      const up = L/layers;
+      const dist = ridge + up*batter;            // horizontal offset rises monotonically with height
+      const jag  = Math.sin(i*0.55 + L)*0.45*up;  // small vertical ripple, stronger near the top
+      tmpV.copy(pos).addScaledVector(right, side*dist).setY(pos.y - 2.2 + up*wallH + jag);
+      verts.push(tmpV.x,tmpV.y,tmpV.z);
+      const c=new THREE.Color(BANDS[L%BANDS.length]); colors.push(c.r,c.g,c.b);
+    }
+    row++;
+  }
+  const cols=layers+1;
+  for(let r=0;r<row-1;r++){
+    for(let L=0;L<layers;L++){
+      const a=r*cols+L, b=a+1, cc=(r+1)*cols+L, d2=cc+1;
+      if(side<0){ idxs.push(a,b,cc, b,d2,cc); } else { idxs.push(a,cc,b, b,cc,d2); }
+    }
+  }
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(verts,3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(colors,3));
+  g.setIndex(idxs); g.computeVertexNormals();
+  // DoubleSide so a face never culls out (vanishes) when its normal flips on an inner curve
+  return new THREE.Mesh(g, new THREE.MeshPhongMaterial({vertexColors:true, flatShading:true, side:THREE.DoubleSide}));
+}
+
+function buildScatter(group,i0,i1){
+  const pos=new THREE.Vector3(), tan=new THREE.Vector3(), right=new THREE.Vector3();
+  for(let i=i0;i<i1;i+=1){
+    // rock arch "gate" landmark roughly every chunk
+    if(i % 60 === 0 && i>0){
+      const s=i*CFG.segLen; sampleTrack(s,pos,tan,right);
+      group.add(makeArch(pos,tan));
+    }
+    // cacti on the rims
+    if((i*7)%11===0){
+      const s=i*CFG.segLen; sampleTrack(s,pos,tan,right);
+      const side = (i%2)?1:-1;
+      const cz = pos.clone().addScaledVector(right, side*(CFG.trackHalfW+1.8)).setY(pos.y-1.6);
+      group.add(makeCactus(cz));
+    }
+  }
+}
+
+function makeArch(pos,tan){
+  const g=new THREE.Group();
+  const mat=new THREE.MeshPhongMaterial({color:0xb5632f, flatShading:true});
+  const torus=new THREE.Mesh(new THREE.TorusGeometry(6,1.4,6,14,Math.PI), mat);
+  torus.position.copy(pos).setY(pos.y+1.5);
+  torus.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,-1), tan);
+  g.add(torus);
+  return g;
+}
+function makeCactus(p){
+  const g=new THREE.Group();
+  const m=new THREE.MeshPhongMaterial({color:0x4a6b3a, flatShading:true});
+  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.34,3.2,7), m);
+  trunk.position.copy(p).setY(p.y+1.6); g.add(trunk);
+  for(const s of [-1,1]){
+    const arm=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.2,1.2,6), m);
+    arm.position.copy(p).setY(p.y+2.0); arm.position.x+=s*0.45;
+    g.add(arm);
+    const up=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.16,0.9,6), m);
+    up.position.copy(p).setY(p.y+2.7); up.position.x+=s*0.7; g.add(up);
+  }
+  return g;
+}
+
+/* ====================== ENTITIES (hazards/pickups) ====================== */
+function spawnEntity(dist){
+  const lane = (Math.random()*2-1)*0.85;
+  const roll = Math.random();
+  let type;
+  if(roll<0.34) type='boulder';
+  else if(roll<0.52) type='tumbleweed';
+  else if(roll<0.70) type='dynamite';
+  else if(roll<0.90) type='gold';
+  else type='repair';
+
+  let mesh;
+  if(type==='boulder'){
+    mesh=new THREE.Mesh(new THREE.DodecahedronGeometry(0.9,0),
+         new THREE.MeshPhongMaterial({color:0x5a4636, flatShading:true}));
+  } else if(type==='tumbleweed'){
+    mesh=new THREE.Mesh(new THREE.IcosahedronGeometry(0.7,1),
+         new THREE.MeshPhongMaterial({color:0x9a7a3a, flatShading:true, wireframe:true}));
+  } else if(type==='dynamite'){
+    mesh=new THREE.Group();
+    const crate=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.9,0.9),
+         new THREE.MeshPhongMaterial({color:0x8a2f22, flatShading:true})); mesh.add(crate);
+    const band=new THREE.Mesh(new THREE.BoxGeometry(0.94,0.18,0.94),
+         new THREE.MeshPhongMaterial({color:0x2a1408})); mesh.add(band);
+    const spark=new THREE.Mesh(new THREE.SphereGeometry(0.12,8,8),
+         new THREE.MeshBasicMaterial({color:0xffd24a})); spark.position.set(0.2,0.62,0.2);
+    mesh.add(spark); mesh.userData.spark=spark;
+  } else if(type==='gold'){
+    mesh=new THREE.Mesh(new THREE.OctahedronGeometry(0.42,0),
+         new THREE.MeshPhongMaterial({color:0xffcf3f, emissive:0x6a4a00, shininess:120, flatShading:true}));
+  } else { // repair
+    mesh=new THREE.Group();
+    const box=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.5,0.5),
+         new THREE.MeshPhongMaterial({color:0x4a8fb0, flatShading:true})); mesh.add(box);
+    const cr1=new THREE.Mesh(new THREE.BoxGeometry(0.62,0.12,0.16),
+         new THREE.MeshPhongMaterial({color:0xf0dca8})); cr1.position.y=0.04; mesh.add(cr1);
+    const cr2=cr1.clone(); cr2.rotation.y=Math.PI/2; mesh.add(cr2);
+  }
+  scene.add(mesh);
+  const e={type, mesh, dist, lane, dead:false, spin:Math.random()*6};
+  positionEntity(e);
+  entities.push(e);
+}
+
+function positionEntity(e){
+  const pos=new THREE.Vector3(), tan=new THREE.Vector3(), right=new THREE.Vector3();
+  sampleTrack(e.dist,pos,tan,right);
+  const yOff = (e.type==='gold'||e.type==='repair') ? 1.3 : (e.type==='tumbleweed'?0.9:0.85);
+  e.mesh.position.copy(pos).addScaledVector(right, e.lane*CFG.trackHalfW).setY(pos.y+yOff);
+  e._worldRight = right.clone();
+}
+
+/* ====================== WEAPON ====================== */
+function fire(originScreenOrController){
+  if(!player.alive) return;
+  if(player.reloading){ return; }            // mid-reload: dead trigger
+  if(player.ammo<=0){ startReload(); emptySfx(); return; } // safety; normally auto-reloads on last shot
+  if(fireTimer>0) return;                     // between-shot cadence
+  fireTimer = CFG.fireCooldown;
+  player.ammo--;
+  shootSfx();
+  muzzleFlash();
+  if(player.ammo<=0) startReload();           // emptied the cylinder -> reload kicks in
+
+  let originW, dirW;
+  if(inVR && fireHand){
+    originW = new THREE.Vector3(); fireHand.getWorldPosition(originW);
+    dirW = new THREE.Vector3(0,0,-1).applyQuaternion(fireHand.getWorldQuaternion(tmpQ)).normalize();
+    raycaster.set(originW, dirW);
+  } else {
+    const nx = isTouch ? 0 : mouseNDC.x;
+    const ny = isTouch ? 0 : mouseNDC.y;
+    raycaster.setFromCamera({x:nx,y:ny}, camera);
+    originW = raycaster.ray.origin.clone();
+    dirW = raycaster.ray.direction.clone();
+  }
+
+  // test against active shootable entities
+  let hit=null, hitDist=1e9;
+  for(const e of entities){
+    if(e.dead) continue;
+    if(e.type!=='dynamite' && e.type!=='tumbleweed' && e.type!=='boulder') continue;
+    e.mesh.getWorldPosition(tmpV);
+    const t = tmpV.clone().sub(originW).dot(dirW);
+    if(t<0) continue;
+    const closest = originW.clone().addScaledVector(dirW, t);
+    const d = closest.distanceTo(tmpV);
+    const r = e.type==='boulder'?1.0:0.8;
+    if(d < r && t < hitDist){ hit=e; hitDist=t; }
+  }
+  // tracer
+  spawnTracer(originW, hit ? originW.clone().addScaledVector(dirW,hitDist) : originW.clone().addScaledVector(dirW,120));
+  if(hit){
+    if(hit.type==='dynamite'){ explodeAt(hit.mesh.position); player.gold+=5; flashMsg('+$5'); }
+    else if(hit.type==='boulder'){ player.gold+=2; }
+    else { player.gold+=1; }
+    killEntity(hit, true);
+    explosionSfx(hit.type==='dynamite');
+    updateHud();
+  }
+}
+
+function startReload(){
+  if(player.reloading) return;
+  player.reloading=true; player.reloadTimer=CFG.reloadTime;
+  reloadStartSfx();
+  flashMsg('Reloading…');
+}
+function tickReload(dt){
+  if(!player.reloading) return;
+  player.reloadTimer-=dt;
+  if(player.reloadTimer<=0){
+    player.reloading=false; player.ammo=CFG.magSize;
+    reloadDoneSfx();
+  }
+}
+
+function spawnTracer(a,b){
+  const g=new THREE.BufferGeometry().setFromPoints([a,b]);
+  const l=new THREE.Line(g, new THREE.LineBasicMaterial({color:0xffe08a}));
+  scene.add(l); bullets.push({mesh:l, life:0.06});
+}
+function explodeAt(p){
+  for(let i=0;i<14;i++){
+    const s=new THREE.Mesh(new THREE.SphereGeometry(0.16+Math.random()*0.18,6,6),
+       new THREE.MeshBasicMaterial({color:i%2?0xffb030:0xff5020}));
+    s.position.copy(p);
+    const v=new THREE.Vector3((Math.random()-0.5),(Math.random()*0.8+0.2),(Math.random()-0.5)).multiplyScalar(6+Math.random()*5);
+    scene.add(s); bullets.push({mesh:s, life:0.5, vel:v, grav:true});
+  }
+}
+
+/* ====================== VR controllers ====================== */
+function buildVRControllers(){
+  controller0 = renderer.xr.getController(0);
+  controller1 = renderer.xr.getController(1);
+  dolly.add(controller0); dolly.add(controller1);
+  // simple six-shooter mesh on each hand
+  for(const c of [controller0, controller1]){
+    const gun=new THREE.Group();
+    const barrel=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,0.28),
+       new THREE.MeshPhongMaterial({color:0x39312e})); barrel.position.z=-0.14; gun.add(barrel);
+    const grip=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.14,0.07),
+       new THREE.MeshPhongMaterial({color:0x6e4326})); grip.position.set(0,-0.08,0.02); gun.add(grip);
+    c.add(gun);
+    c.addEventListener('selectstart', ()=>{ fireHand=c; fire(); });
+  }
+  // laser + reticle (parented to firing hand each frame)
+  xrLaser=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0),new THREE.Vector3(0,0,-1)]),
+       new THREE.LineBasicMaterial({color:0xffd24a, transparent:true, opacity:.5}));
+  xrLaser.scale.z=40; xrLaser.visible=false; scene.add(xrLaser);
+  xrReticle=new THREE.Mesh(new THREE.RingGeometry(0.06,0.09,16),
+       new THREE.MeshBasicMaterial({color:0xffe08a, side:THREE.DoubleSide})); xrReticle.visible=false; scene.add(xrReticle);
+}
+
+/* ====================== VR HUD (world-space) ====================== */
+function buildVRHud(){
+  vrHudCanvas=document.createElement('canvas'); vrHudCanvas.width=512; vrHudCanvas.height=210;
+  vrHudCtx=vrHudCanvas.getContext('2d');
+  vrHudTex=new THREE.CanvasTexture(vrHudCanvas);
+  vrHud=new THREE.Mesh(new THREE.PlaneGeometry(0.9,0.37),
+      new THREE.MeshBasicMaterial({map:vrHudTex, transparent:true}));
+  vrHud.position.set(0,-0.42,-1.1); // fixed to view, lower area
+  vrHud.visible=false;
+  camera.add(vrHud);
+}
+function drawVRHud(){
+  const c=vrHudCtx;
+  c.clearRect(0,0,512,210);
+  c.fillStyle='rgba(240,220,168,0.92)'; roundRect(c,4,4,504,202,14); c.fill();
+  c.fillStyle='#3a2412'; c.lineWidth=4; c.strokeStyle='#3a2412'; roundRect(c,4,4,504,202,14); c.stroke();
+  c.fillStyle='#8a3b22'; c.font='bold 44px Georgia';
+  c.fillText(Math.floor(player.dist-12)+' ft', 24, 64);
+  c.fillStyle='#9a6a12'; c.fillText('$'+player.gold, 24, 116);
+  // health pips
+  for(let i=0;i<CFG.maxHealth;i++){
+    c.fillStyle = i<player.health ? '#c0381a' : '#cdbb95';
+    roundRect(c, 300+i*38, 24, 30, 34, 6); c.fill();
+    c.strokeStyle='#3a2412'; c.lineWidth=3; roundRect(c,300+i*38,24,30,34,6); c.stroke();
+  }
+  // throttle bar
+  c.fillStyle='#cdbb95'; roundRect(c,300,78,160,26,8); c.fill();
+  c.fillStyle='#b5532a'; roundRect(c,302,80,156*player.throttle,22,7); c.fill();
+  // ammo cylinder row (bottom)
+  if(player.reloading){
+    c.fillStyle='#9a3a1c'; c.font='bold 22px Georgia'; c.fillText('RELOADING', 24, 176);
+    c.fillStyle='#cdbb95'; roundRect(c,200,158,288,22,8); c.fill();
+    c.fillStyle='#b5532a'; roundRect(c,202,160,284*(1-player.reloadTimer/CFG.reloadTime),18,7); c.fill();
+    c.strokeStyle='#3a2412'; c.lineWidth=3; roundRect(c,200,158,288,22,8); c.stroke();
+  } else {
+    const sw=20, gap=8, total=CFG.magSize*sw+(CFG.magSize-1)*gap, sx=(512-total)/2;
+    for(let i=0;i<CFG.magSize;i++){
+      c.fillStyle = i<player.ammo ? '#d68a32' : '#cdbb95';
+      roundRect(c, sx+i*(sw+gap), 156, sw, 30, 5); c.fill();
+      c.strokeStyle='#3a2412'; c.lineWidth=3; roundRect(c, sx+i*(sw+gap), 156, sw, 30, 5); c.stroke();
+    }
+  }
+  vrHudTex.needsUpdate=true;
+}
+function roundRect(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+
+/* ============================ INPUT ============================ */
+function bindInput(){
+  addEventListener('keydown', e=>{ keys[e.code]=true;
+    if(e.code==='Space'){ e.preventDefault(); fire(); }
+    if(e.code==='KeyR'){ if(player.alive && !player.reloading && player.ammo<CFG.magSize) startReload(); } });
+  addEventListener('keyup', e=>{ keys[e.code]=false; });
+  addEventListener('mousemove', e=>{
+    mouseNDC.x=(e.clientX/window.innerWidth)*2-1;
+    mouseNDC.y=-(e.clientY/window.innerHeight)*2+1;
+    if(reticleEl){ reticleEl.style.left=e.clientX+'px'; reticleEl.style.top=e.clientY+'px'; reticleEl.style.transform='translate(-50%,-50%)'; }
+  });
+  renderer.domElement.addEventListener('mousedown', e=>{ if(player.alive) fire(); });
+
+  // touch
+  const hold=(id,key)=>{
+    const el=$(id);
+    const on=e=>{e.preventDefault(); touchState[key]=true;};
+    const off=e=>{e.preventDefault(); touchState[key]=false;};
+    el.addEventListener('touchstart',on,{passive:false}); el.addEventListener('touchend',off);
+    el.addEventListener('mousedown',on); el.addEventListener('mouseup',off); el.addEventListener('mouseleave',off);
+  };
+  hold('t-left','left'); hold('t-right','right'); hold('t-up','up'); hold('t-down','down');
+  const fb=$('t-fire');
+  const fOn=e=>{e.preventDefault(); fire();};
+  fb.addEventListener('touchstart',fOn,{passive:false}); fb.addEventListener('mousedown',fOn);
+
+  // detect touch device → show touch UI
+  window.addEventListener('touchstart', function once(){ isTouch=true; $('touch').style.display='block';
+    window.removeEventListener('touchstart', once); }, {once:true});
+
+  $('play').addEventListener('click', ()=>startGame(false));
+  $('again').addEventListener('click', ()=>startGame(false));
+  $('vrbtn').addEventListener('click', ()=>startGame(true));
+}
+
+function setupKeyHints(){
+  $('keyhints').innerHTML =
+    '<span><b>A</b>/<b>D</b> lean</span><span><b>W</b>/<b>S</b> throttle</span>'+
+    '<span><b>Mouse</b> aim</span><span><b>Click</b>/<b>Space</b> fire</span><span><b>R</b> reload</span>';
+}
+
+function detectVR(){
+  if(navigator.xr && navigator.xr.isSessionSupported){
+    navigator.xr.isSessionSupported('immersive-vr').then(ok=>{ if(ok) $('vrbtn').disabled=false; });
+  }
+}
+
+/* ============================ GAME FLOW ============================ */
+function startGame(wantVR){
+  // reset
+  player.dist=12; player.speed=22; player.throttle=0.3; player.lane=0; player.targetLane=0;
+  player.health=CFG.maxHealth; player.gold=0; player.alive=true;
+  player.ammo=CFG.magSize; player.reloading=false; player.reloadTimer=0;
+  for(const e of entities){ scene.remove(e.mesh); }
+  entities.length=0; nextSpawnDist=60;
+  // regenerate a fresh path
+  pathPts.length=0; pathUp.length=0; genHeading=0; genPitch=0; genTurnGoal=0; genPitchGoal=0;
+  pathPts.push(new THREE.Vector3(0,0,0)); pathUp.push(UP.clone());
+  ensurePath(200);
+  for(const ch of chunks){ scene.remove(ch.group); disposeGroup(ch.group); } chunks.length=0;
+  rebuildChunks(0);
+
+  $('start').classList.add('hidden'); $('over').classList.add('hidden');
+  $('hud').classList.remove('hidden');
+  buildHealthPips();
+  updateHud();
+
+  if(wantVR){ enterVR(); } else { exitVRflagsForFlat(); }
+}
+
+function exitVRflagsForFlat(){
+  inVR=false;
+  reticleEl.classList.toggle('hidden', isTouch);   // hide center reticle on mobile (tap-to-fire uses screen center anyway)
+  if(!isTouch) reticleEl.classList.remove('hidden');
+  vrHud.visible=false; xrLaser.visible=false; xrReticle.visible=false;
+}
+
+async function enterVR(){
+  try{
+    const session=await navigator.xr.requestSession('immersive-vr',{optionalFeatures:['local-floor','bounded-floor']});
+    await renderer.xr.setSession(session);
+    inVR=true;
+    reticleEl.classList.add('hidden');
+    vrHud.visible=true; xrLaser.visible=true; xrReticle.visible=true;
+    session.addEventListener('end', ()=>{ inVR=false; vrHud.visible=false; xrLaser.visible=false; xrReticle.visible=false;
+       if(!isTouch) reticleEl.classList.remove('hidden'); });
+  }catch(err){ console.warn('VR start failed', err); exitVRflagsForFlat(); }
+}
+
+function gameOver(){
+  player.alive=false;
+  crashSfx();
+  const ft=Math.floor(player.dist-12);
+  if(ft>best) best=ft;
+  $('o-dist').textContent=ft;
+  $('o-gold').textContent=player.gold;
+  $('o-best').textContent='Best run: '+best+' ft';
+  $('hud').classList.add('hidden');
+  $('over').classList.remove('hidden');
+  if(inVR && renderer.xr.getSession){ const s=renderer.xr.getSession(); if(s) s.end(); }
+}
+
+/* ============================ MAIN LOOP ============================ */
+function loop(){
+  const dt=Math.min(clock.getDelta(), 0.05);
+  if(player.alive){ updatePlay(dt); }
+  updateBullets(dt);
+  if(inVR) drawVRHud();
+  renderer.render(scene, camera);
+}
+
+function updatePlay(dt){
+  // ---- throttle ----
+  let thrUp=keys['KeyW']||keys['ArrowUp']||touchState.up;
+  let thrDn=keys['KeyS']||keys['ArrowDown']||touchState.down;
+  // VR thumbstick (forward axis) throttle + lateral lean
+  let vrLat=0;
+  if(inVR){
+    const s=renderer.xr.getSession();
+    if(s) for(const src of s.inputSources){
+      if(src.gamepad && src.gamepad.axes.length>=4){
+        const lx=src.gamepad.axes[2], ly=src.gamepad.axes[3];
+        if(Math.abs(ly)>0.15){ if(ly<0) thrUp=true; else thrDn=true; }
+        if(Math.abs(lx)>0.15) vrLat=lx;
+      }
+    }
+  }
+  if(thrUp) player.throttle=Math.min(1, player.throttle+CFG.throttleRate*dt);
+  if(thrDn) player.throttle=Math.max(0, player.throttle-CFG.throttleRate*dt);
+  player.speed=CFG.speedMin+(CFG.speedMax-CFG.speedMin)*player.throttle;
+
+  // ---- lateral lean ----
+  let steer=0;
+  if(keys['KeyA']||keys['ArrowLeft']||touchState.left) steer-=1;
+  if(keys['KeyD']||keys['ArrowRight']||touchState.right) steer+=1;
+  if(vrLat) steer+=vrLat;
+  player.targetLane=Math.max(-0.95, Math.min(0.95, player.targetLane+steer*dt*2.2));
+  if(steer===0) player.targetLane*=(1-Math.min(1,dt*1.5)); // ease back to center
+  player.lane += (player.targetLane-player.lane)*Math.min(1,dt*CFG.laneLerp);
+
+  // ---- advance along track ----
+  player.dist += player.speed*dt;
+
+  // place dolly on the rail at current dist+lane, oriented down the track
+  const pos=new THREE.Vector3(), tan=new THREE.Vector3(), right=new THREE.Vector3();
+  const idx=sampleTrack(player.dist,pos,tan,right);
+  const railPos=pos.clone().addScaledVector(right, player.lane*CFG.trackHalfW);
+  dolly.position.copy(railPos);
+  // orient dolly to face tangent
+  tmpV.copy(railPos).add(tan);
+  const m=new THREE.Matrix4().lookAt(railPos, tmpV, UP);
+  dolly.quaternion.setFromRotationMatrix(m);
+
+  // cart banking by curvature
+  const ahead=new THREE.Vector3(), t2=new THREE.Vector3(), r2=new THREE.Vector3();
+  sampleTrack(player.dist+6, ahead, t2, r2);
+  const curve = t2.clone().sub(tan).dot(right);
+  cartTiltZ += ((-curve*2.2 - player.lane*0.12) - cartTiltZ)*Math.min(1,dt*5);
+  if(cart) cart.rotation.z = cartTiltZ;
+
+  // keep visual chunks around us
+  rebuildChunks(idx);
+
+  // ---- spawn hazards ahead ----
+  while(nextSpawnDist < player.dist + 260){
+    spawnEntity(nextSpawnDist);
+    nextSpawnDist += CFG.spawnEveryMin + Math.random()*(CFG.spawnEveryMax-CFG.spawnEveryMin);
+  }
+
+  // ---- entity update / collisions / recycle ----
+  const cartWorld=new THREE.Vector3(); dolly.getWorldPosition(cartWorld); cartWorld.y+=0.9;
+  for(let i=entities.length-1;i>=0;i--){
+    const e=entities[i];
+    if(e.dead){ scene.remove(e.mesh); entities.splice(i,1); continue; }
+    // animations
+    e.spin+=dt;
+    if(e.type==='gold'){ e.mesh.rotation.y=e.spin*2; e.mesh.position.y += Math.sin(e.spin*3)*0.004; }
+    else if(e.type==='tumbleweed'){ e.mesh.rotation.x=e.spin*3; e.mesh.rotation.z=e.spin*2;
+      // roll across track
+      e.lane += Math.sin(e.spin*1.5)*dt*0.4; positionEntity(e); }
+    else if(e.type==='dynamite' && e.mesh.userData.spark){ e.mesh.userData.spark.visible = (Math.sin(e.spin*20)>0); }
+    else if(e.type==='repair'){ e.mesh.rotation.y=e.spin*1.5; }
+    else { e.mesh.rotation.y=e.spin*0.6; }
+
+    // recycle behind
+    if(e.dist < player.dist-12){ scene.remove(e.mesh); entities.splice(i,1); continue; }
+
+    // collision when player passes its dist (window scales with speed so fast frames can't tunnel)
+    const hitWin=Math.max(2.2, player.speed*dt*1.3);
+    if(Math.abs(e.dist-player.dist) < hitWin){
+      e.mesh.getWorldPosition(tmpV);
+      const d=tmpV.distanceTo(cartWorld);
+      if(e.type==='gold' && d<CFG.goldMagnet){ player.gold+=3; flashMsg('+$3'); goldSfx(); killEntity(e,false); updateHud(); }
+      else if(e.type==='repair' && d<CFG.hitRadius+0.4){ player.health=Math.min(CFG.maxHealth,player.health+2); flashMsg('Repaired'); repairSfx(); killEntity(e,false); updateHud(); }
+      else if((e.type==='boulder'||e.type==='dynamite'||e.type==='tumbleweed') && d<CFG.hitRadius){
+        takeHit(e);
+      }
+    }
+  }
+
+  // ---- comfort vignette scales with speed (VR + flat) ----
+  const vigT=Math.max(0,(player.speed-CFG.comfortSpeedForVig)/(CFG.speedMax-CFG.comfortSpeedForVig));
+  $('vig').style.opacity = (0.12 + vigT*0.5).toFixed(2);
+
+  // VR laser/reticle follow firing hand (default to controller0)
+  if(inVR){ updateXRaim(); }
+
+  if(fireTimer>0) fireTimer-=dt;
+  tickReload(dt);
+  player._idx=idx;
+  updateHudLight();
+}
+
+function takeHit(e){
+  player.health-=CFG.dmgHit;
+  if(e.type==='dynamite') explodeAt(e.mesh.position), explosionSfx(true);
+  killEntity(e,true);
+  hurtFlash(); thudSfx();
+  updateHud();
+  if(player.health<=0) gameOver();
+}
+
+function killEntity(e,fx){ e.dead=true; }
+
+function updateXRaim(){
+  const hand=fireHand||controller0;
+  if(!hand) return;
+  hand.getWorldPosition(tmpV);
+  const dir=new THREE.Vector3(0,0,-1).applyQuaternion(hand.getWorldQuaternion(tmpQ));
+  xrLaser.position.copy(tmpV); xrLaser.quaternion.copy(hand.getWorldQuaternion(tmpQ));
+  xrReticle.position.copy(tmpV).addScaledVector(dir, 12);
+  xrReticle.lookAt(camera.getWorldPosition(tmpV2));
+}
+
+function updateBullets(dt){
+  for(let i=bullets.length-1;i>=0;i--){
+    const b=bullets[i]; b.life-=dt;
+    if(b.vel){ if(b.grav) b.vel.y-=20*dt; b.mesh.position.addScaledVector(b.vel,dt); }
+    if(b.life<=0){ scene.remove(b.mesh); bullets.splice(i,1); }
+  }
+}
+
+/* ============================ HUD ============================ */
+function buildHealthPips(){
+  const w=$('healthwrap'); w.innerHTML='';
+  for(let i=0;i<CFG.maxHealth;i++){ const p=document.createElement('div'); p.className='pip'; w.appendChild(p); }
+  const s=$('shells'); s.innerHTML='';
+  for(let i=0;i<CFG.magSize;i++){ const sh=document.createElement('div'); sh.className='shell'; s.appendChild(sh); }
+}
+function updateHud(){
+  $('gold').textContent=player.gold;
+  const pips=$('healthwrap').children;
+  for(let i=0;i<pips.length;i++) pips[i].className='pip '+(i<player.health?'full':'empty');
+}
+function updateHudLight(){
+  $('dist').textContent=Math.floor(player.dist-12);
+  $('throttlefill').style.height=(player.throttle*100).toFixed(0)+'%';
+  // ammo cylinder
+  const shells=$('shells').children;
+  for(let i=0;i<shells.length;i++) shells[i].className='shell '+(i<player.ammo?'':'spent');
+  const wrap=$('ammowrap'), bar=$('reloadbar');
+  if(player.reloading){
+    wrap.classList.add('reloading');
+    $('ammolbl').textContent='Reloading';
+    bar.style.display='block';
+    $('reloadfill').style.width=((1-player.reloadTimer/CFG.reloadTime)*100).toFixed(0)+'%';
+  } else {
+    wrap.classList.remove('reloading');
+    $('ammolbl').textContent='Cylinder';
+    bar.style.display='none';
+  }
+}
+
+let msgTimer=null;
+function flashMsg(t){
+  const m=$('msg'); m.textContent=t; m.style.opacity=1;
+  clearTimeout(msgTimer); msgTimer=setTimeout(()=>{ m.style.opacity=0; }, 650);
+}
+function muzzleFlash(){ const f=$('flash'); f.style.opacity=0.25; setTimeout(()=>f.style.opacity=0,60); }
+function hurtFlash(){ const f=$('flash'); f.style.background='#b5231f'; f.style.opacity=0.4;
+  setTimeout(()=>{ f.style.opacity=0; setTimeout(()=>f.style.background='#fff',120); },90); }
+
+/* ============================ AUDIO ============================ */
+let AC=null;
+function ac(){ if(!AC){ AC=new (window.AudioContext||window.webkitAudioContext)(); } return AC; }
+function blip(freq,dur,type,vol,slideTo){
+  const c=ac(); const o=c.createOscillator(), g=c.createGain();
+  o.type=type||'square'; o.frequency.value=freq;
+  if(slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, c.currentTime+dur);
+  g.gain.value=vol||0.12; g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime+dur);
+  o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime+dur);
+}
+function noiseBurst(dur,vol){
+  const c=ac(); const n=c.createBufferSource(); const b=c.createBuffer(1,c.sampleRate*dur,c.sampleRate);
+  const d=b.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,2);
+  n.buffer=b; const g=c.createGain(); g.gain.value=vol||0.3; n.connect(g); g.connect(c.destination); n.start();
+}
+function shootSfx(){ blip(880,0.08,'square',0.10,180); noiseBurst(0.06,0.18); }
+function explosionSfx(big){ noiseBurst(big?0.5:0.3, big?0.5:0.3); blip(120,big?0.4:0.25,'sawtooth',0.2,40); }
+function goldSfx(){ blip(1320,0.09,'triangle',0.12,1760); }
+function repairSfx(){ blip(660,0.12,'sine',0.14,990); }
+function thudSfx(){ noiseBurst(0.18,0.4); blip(90,0.2,'sawtooth',0.2,50); }
+function crashSfx(){ noiseBurst(0.8,0.5); blip(70,0.7,'sawtooth',0.25,40); }
+function emptySfx(){ blip(2200,0.03,'square',0.05,1800); }
+function reloadStartSfx(){ blip(300,0.05,'square',0.08); setTimeout(()=>blip(240,0.05,'square',0.08),90); }
+function reloadDoneSfx(){ blip(520,0.06,'square',0.09); setTimeout(()=>blip(900,0.05,'triangle',0.1,1300),80); }
+
+/* ============================ UTIL ============================ */
+function disposeGroup(g){ g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material){ if(Array.isArray(o.material)) o.material.forEach(m=>m.dispose()); else o.material.dispose(); } }); }
+function onResize(){ camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth,window.innerHeight); }
+
+init();
+</script>
+</body>
+</html>
