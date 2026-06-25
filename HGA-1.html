@@ -659,6 +659,7 @@ function updateSalmon(dt){
 // ================= tracker jackers =================
 let playerHP=100, lastSting=99, toastT=0;
 const nests=[], wasps=[], _pp=new THREE.Vector3(), _np=new THREE.Vector3();
+const _mq=new THREE.Quaternion();
 const STING_DMG=12, WASP_SPEED=7, NEST_R=1.3, TRIGGER_R=2.2;
 function makeNest(){
   const m=new THREE.MeshPhongMaterial({color:0x9a8f7d,flatShading:true,shininess:3});
@@ -683,6 +684,16 @@ function makeWasp(){
   g.userData.wings=wings;
   return g;
 }
+function makeNestMarker(){
+  const cv=document.createElement('canvas'); cv.width=256; cv.height=80; const x=cv.getContext('2d');
+  x.fillStyle='rgba(120,20,15,0.85)'; x.fillRect(0,0,256,80);
+  x.strokeStyle='rgba(255,180,120,0.6)'; x.lineWidth=4; x.strokeRect(2,2,252,76);
+  x.fillStyle='#ffd9a8'; x.font='bold 34px sans-serif'; x.textAlign='center'; x.textBaseline='middle';
+  x.fillText('⚠ NEST', 128, 42);
+  const tex=new THREE.CanvasTexture(cv);
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(2.6,0.81), new THREE.MeshBasicMaterial({map:tex,transparent:true,depthTest:false,opacity:0.9}));
+  m.renderOrder=997; m.visible=false; return m;
+}
 function spawnNests(){
   if(!treeCol.length) return;
   const count=3+(Math.random()<0.5?1:0), used=new Set();
@@ -692,7 +703,8 @@ function spawnNests(){
     if(!tr||used.has(tr)) continue; used.add(tr);
     const y=tr.b+tr.th-0.9, g=makeNest(); g.position.set(tr.x,y,tr.z); scene.add(g);   // hang just below the canopy
     const lab=document.createElement('div'); lab.className='nestlabel'; lab.textContent='⚠ tracker jacker nest'; lab.style.display='none'; document.body.appendChild(lab);
-    nests.push({mesh:g,x:tr.x,y,z:tr.z,cool:0,label:lab}); made++;
+    const mk=makeNestMarker(); mk.position.set(tr.x,y+1.7,tr.z); scene.add(mk);
+    nests.push({mesh:g,x:tr.x,y,z:tr.z,cool:0,label:lab,marker:mk}); made++;
   }
 }
 function provoke(nest){
@@ -734,17 +746,26 @@ function updateJackers(dt){
   for(const nest of nests){ if(nest.cool>0) nest.cool-=dt; }
   camera.getWorldPosition(_pp);
   if(started) for(const nest of nests){ if(nest.cool<=0){ const dx=_pp.x-nest.x,dy=_pp.y-nest.y,dz=_pp.z-nest.z; if(dx*dx+dy*dy+dz*dz<TRIGGER_R*TRIGGER_R) provoke(nest); } }
-  const showLab = started && !renderer.xr.isPresenting;
+  const presenting = renderer.xr.isPresenting;
+  if(presenting) camera.getWorldQuaternion(_mq);
   for(const nest of nests){
-    const L=nest.label; if(!L) continue;
     const dx=_pp.x-nest.x, dy=_pp.y-nest.y, dz=_pp.z-nest.z, dist=Math.sqrt(dx*dx+dy*dy+dz*dz);
-    if(showLab && dist<34){
-      _np.set(nest.x,nest.y+1.3,nest.z).project(camera);
-      if(_np.z<1 && _np.x>-1.1 && _np.x<1.1 && _np.y>-1.1 && _np.y<1.1){
-        L.style.display='block'; L.style.left=((_np.x*0.5+0.5)*innerWidth)+'px'; L.style.top=((-_np.y*0.5+0.5)*innerHeight)+'px';
-        L.style.opacity=String(Math.min(1,(34-dist)/8));
-      } else L.style.display='none';
-    } else if(L.style.display!=='none') L.style.display='none';
+    const near = started && dist<34;
+    const L=nest.label;
+    if(L){
+      if(near && !presenting){
+        _np.set(nest.x,nest.y+1.3,nest.z).project(camera);
+        if(_np.z<1 && _np.x>-1.1 && _np.x<1.1 && _np.y>-1.1 && _np.y<1.1){
+          L.style.display='block'; L.style.left=((_np.x*0.5+0.5)*innerWidth)+'px'; L.style.top=((-_np.y*0.5+0.5)*innerHeight)+'px';
+          L.style.opacity=String(Math.min(1,(34-dist)/8));
+        } else L.style.display='none';
+      } else if(L.style.display!=='none') L.style.display='none';
+    }
+    const M=nest.marker;
+    if(M){
+      if(near && presenting){ M.visible=true; M.position.set(nest.x,nest.y+1.7,nest.z); M.quaternion.copy(_mq); M.material.opacity=Math.min(0.92,(34-dist)/8); }
+      else if(M.visible) M.visible=false;
+    }
   }
   for(let i=wasps.length-1;i>=0;i--){
     const w=wasps[i]; if(!w) continue; w.life+=dt; if(w.sCool>0) w.sCool-=dt; const wp=w.mesh.position;
@@ -753,6 +774,8 @@ function updateJackers(dt){
     const tx=_pp.x+w.ox, ty=(_pp.y-0.2)+w.oy, tz=_pp.z+w.oz;
     const dx=tx-wp.x, dy=ty-wp.y, dz=tz-wp.z, d=Math.hypot(dx,dy,dz)||1;
     wp.x+=dx/d*WASP_SPEED*dt; wp.y+=dy/d*WASP_SPEED*dt; wp.z+=dz/d*WASP_SPEED*dt;
+    const surf=(isWaterAt(wp.x,wp.z)?waterTopAt(wp.x,wp.z):terrTop(wp.x,wp.z))+0.3;
+    if(wp.y<surf) wp.y=surf;
     const pdx=_pp.x-wp.x, pdz=_pp.z-wp.z;
     let diff=Math.atan2(pdx,pdz)-w.mesh.rotation.y; while(diff>Math.PI)diff-=2*Math.PI; while(diff<-Math.PI)diff+=2*Math.PI;
     const tstep=1.2*dt; w.mesh.rotation.y+=Math.max(-tstep,Math.min(tstep,diff));   // slower turn -> shows their bodies

@@ -209,6 +209,7 @@ const CFG = {
   reloadTime:    5.0,      // seconds to refill once emptied
   bulletSpeed:   140,
   comfortSpeedForVig: 33,  // vignette starts tightening past this speed
+  vrSpeedMul:    0.9,      // VR runs 10% slower than desktop for comfort
 };
 
 // ---- core three.js ----
@@ -249,7 +250,8 @@ const touchState = { left:false, right:false, up:false, down:false };
 let controller0, controller1, fireHand = null;
 let xrLaser, xrReticle;
 let vrHud, vrHudCanvas, vrHudCtx, vrHudTex;
-let inVR = false;
+let vrOver, vrOverCanvas, vrOverCtx, vrOverTex;
+let inVR = false, wasVR = false;
 
 // ---- dom ----
 const $ = id => document.getElementById(id);
@@ -303,6 +305,7 @@ function init(){
   buildCart();
   buildVRControllers();
   buildVRHud();
+  buildVROver();
 
   reticleEl = $('reticle');
   clock = new THREE.Clock();
@@ -666,7 +669,10 @@ function buildVRControllers(){
     const grip=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.14,0.07),
        new THREE.MeshPhongMaterial({color:0x6e4326})); grip.position.set(0,-0.08,0.02); gun.add(grip);
     c.add(gun);
-    c.addEventListener('selectstart', ()=>{ fireHand=c; fire(); });
+    c.addEventListener('selectstart', ()=>{
+      if(inVR && !player.alive){ if(vrOver) vrOver.visible=false; startGame(true); return; }
+      fireHand=c; fire();
+    });
   }
   // laser + reticle (parented to firing hand each frame)
   xrLaser=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0),new THREE.Vector3(0,0,-1)]),
@@ -686,6 +692,34 @@ function buildVRHud(){
   vrHud.position.set(0,-0.42,-1.1); // fixed to view, lower area
   vrHud.visible=false;
   camera.add(vrHud);
+}
+
+/* VR game-over panel (world-space, centered in view) — trigger to ride again */
+function buildVROver(){
+  vrOverCanvas=document.createElement('canvas'); vrOverCanvas.width=512; vrOverCanvas.height=384;
+  vrOverCtx=vrOverCanvas.getContext('2d');
+  vrOverTex=new THREE.CanvasTexture(vrOverCanvas);
+  vrOver=new THREE.Mesh(new THREE.PlaneGeometry(0.78,0.585),
+      new THREE.MeshBasicMaterial({map:vrOverTex, transparent:true}));
+  vrOver.position.set(0,-0.05,-1.4); // centered, comfortable distance
+  vrOver.visible=false;
+  camera.add(vrOver);
+}
+function drawVROver(ft){
+  const c=vrOverCtx;
+  c.clearRect(0,0,512,384);
+  c.fillStyle='rgba(240,220,168,0.96)'; roundRect(c,6,6,500,372,18); c.fill();
+  c.lineWidth=6; c.strokeStyle='#3a2412'; roundRect(c,6,6,500,372,18); c.stroke();
+  c.textAlign='center';
+  c.fillStyle='#8a3b22'; c.font='bold 64px Georgia'; c.fillText('DERAILED!', 256, 96);
+  c.fillStyle='#3c240f'; c.font='24px Georgia'; c.fillText('You rode', 256, 150);
+  c.fillStyle='#8a3b22'; c.font='bold 56px Georgia'; c.fillText(ft+' ft', 256, 206);
+  c.fillStyle='#3c240f'; c.font='24px Georgia'; c.fillText('and panned', 256, 250);
+  c.fillStyle='#9a6a12'; c.font='bold 48px Georgia'; c.fillText('$'+player.gold, 256, 300);
+  c.fillStyle='#5a3a1c'; c.font='22px Georgia'; c.fillText('Best: '+best+' ft', 256, 338);
+  c.fillStyle='#b5231f'; c.font='bold 26px Georgia'; c.fillText('— Pull trigger to ride again —', 256, 368);
+  c.textAlign='left';
+  vrOverTex.needsUpdate=true;
 }
 function drawVRHud(){
   const c=vrHudCtx;
@@ -753,7 +787,7 @@ function bindInput(){
     window.removeEventListener('touchstart', once); }, {once:true});
 
   $('play').addEventListener('click', ()=>startGame(false));
-  $('again').addEventListener('click', ()=>startGame(false));
+  $('again').addEventListener('click', ()=>startGame(wasVR));
   $('vrbtn').addEventListener('click', ()=>startGame(true));
 }
 
@@ -789,7 +823,14 @@ function startGame(wantVR){
   buildHealthPips();
   updateHud();
 
-  if(wantVR){ enterVR(); } else { exitVRflagsForFlat(); }
+  wasVR = wantVR;
+  if(vrOver) vrOver.visible=false;
+  if(wantVR){
+    if(inVR){ vrHud.visible=true; xrLaser.visible=true; xrReticle.visible=true; } // already in headset (restart): keep the session
+    else enterVR();
+  } else {
+    exitVRflagsForFlat();
+  }
 }
 
 function exitVRflagsForFlat(){
@@ -819,9 +860,15 @@ function gameOver(){
   $('o-dist').textContent=ft;
   $('o-gold').textContent=player.gold;
   $('o-best').textContent='Best run: '+best+' ft';
-  $('hud').classList.add('hidden');
-  $('over').classList.remove('hidden');
-  if(inVR && renderer.xr.getSession){ const s=renderer.xr.getSession(); if(s) s.end(); }
+  if(inVR){
+    // stay in the headset: keep the XR session, show a world-space panel, restart on trigger
+    vrHud.visible=false;
+    drawVROver(ft);
+    if(vrOver) vrOver.visible=true;
+  } else {
+    $('hud').classList.add('hidden');
+    $('over').classList.remove('hidden');
+  }
 }
 
 /* ============================ MAIN LOOP ============================ */
@@ -851,7 +898,7 @@ function updatePlay(dt){
   }
   if(thrUp) player.throttle=Math.min(1, player.throttle+CFG.throttleRate*dt);
   if(thrDn) player.throttle=Math.max(0, player.throttle-CFG.throttleRate*dt);
-  player.speed=CFG.speedMin+(CFG.speedMax-CFG.speedMin)*player.throttle;
+  player.speed=(CFG.speedMin+(CFG.speedMax-CFG.speedMin)*player.throttle) * (inVR?CFG.vrSpeedMul:1);
 
   // ---- lateral lean ----
   let steer=0;
