@@ -150,6 +150,48 @@
     text-shadow: 0 0 8px var(--neon-yellow);
     margin-top: 4px;
   }
+
+  .sound-row {
+    display: flex; align-items: center; gap: 14px;
+  }
+  .sound-label {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 12px; letter-spacing: 4px;
+    color: var(--neon-cyan);
+    text-shadow: 0 0 8px var(--neon-cyan);
+  }
+  .sound-toggle {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 16px 6px 8px;
+    border-radius: 999px;
+    cursor: pointer;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 13px; font-weight: 700; letter-spacing: 2px;
+    transition: all 0.18s ease;
+  }
+  .sound-toggle .sound-toggle-dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    transition: all 0.18s ease;
+  }
+  .sound-toggle.on {
+    border: 1.5px solid var(--neon-cyan);
+    background: rgba(0,240,255,0.12);
+    color: var(--neon-cyan);
+    box-shadow: 0 0 14px rgba(0,240,255,0.4);
+  }
+  .sound-toggle.on .sound-toggle-dot {
+    background: var(--neon-cyan);
+    box-shadow: 0 0 10px var(--neon-cyan);
+  }
+  .sound-toggle.off {
+    border: 1.5px solid rgba(120,120,140,0.5);
+    background: rgba(120,120,140,0.08);
+    color: #8a8aa0;
+    box-shadow: none;
+  }
+  .sound-toggle.off .sound-toggle-dot {
+    background: #5a5a70; box-shadow: none;
+  }
   .mode-row {
     display: flex; gap: 18px; flex-wrap: wrap; justify-content: center;
   }
@@ -283,16 +325,32 @@
   #touch-controls {
     position: fixed; bottom: 0; left: 0; right: 0; z-index: 25;
     display: none;
+    align-items: center;
     justify-content: space-between;
-    padding: 22px;
+    padding: 22px 28px calc(22px + env(safe-area-inset-bottom));
     pointer-events: none;
+    background: linear-gradient(to top, rgba(10,1,24,0.92) 0%, rgba(10,1,24,0.7) 55%, rgba(10,1,24,0) 100%);
+    border-top: 1px solid rgba(184,41,255,0.3);
   }
-  .touch-pad {
-    display: grid;
-    grid-template-columns: 56px 56px 56px;
-    grid-template-rows: 56px 56px 56px;
-    gap: 6px;
+  #joystick-base {
+    position: relative;
+    width: 124px; height: 124px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(0,240,255,0.4);
+    background: radial-gradient(circle at center, rgba(0,240,255,0.08), rgba(0,240,255,0.02) 70%, transparent);
+    box-shadow: 0 0 16px rgba(0,240,255,0.18), inset 0 0 24px rgba(0,240,255,0.06);
     pointer-events: auto;
+    touch-action: none;
+  }
+  #joystick-thumb {
+    position: absolute; left: 50%; top: 50%;
+    width: 54px; height: 54px;
+    margin: -27px 0 0 -27px;
+    border-radius: 50%;
+    border: 1.5px solid var(--neon-cyan);
+    background: radial-gradient(circle at 35% 30%, rgba(0,240,255,0.55), rgba(0,240,255,0.15));
+    box-shadow: 0 0 14px rgba(0,240,255,0.6), inset 0 0 10px rgba(255,255,255,0.25);
+    will-change: transform;
   }
   .touch-btn {
     display: flex; align-items: center; justify-content: center;
@@ -335,6 +393,13 @@
   <div class="panel">
     <h1 class="title">VECTOR RUSH</h1>
     <div class="subtitle">// ENDLESS POLYGON FIELD //</div>
+    <div class="sound-row">
+      <span class="sound-label">SOUND</span>
+      <button class="sound-toggle on" id="sound-toggle">
+        <span class="sound-toggle-dot"></span>
+        <span class="sound-toggle-text">ON</span>
+      </button>
+    </div>
     <div class="mode-prompt">SELECT YOUR PLATFORM</div>
     <div class="mode-row">
       <button class="mode-btn" id="mode-desktop">
@@ -389,19 +454,8 @@
 <div id="flash"></div>
 
 <div id="touch-controls">
-  <div class="touch-pad" style="grid-template-areas:
-      '. up .'
-      'left . right'
-      '. down .'; ">
-    <div></div>
-    <div class="touch-btn" data-key="up" style="grid-area:up;">&#8593;</div>
-    <div></div>
-    <div class="touch-btn" data-key="left" style="grid-area:left;">&#8592;</div>
-    <div></div>
-    <div class="touch-btn" data-key="right" style="grid-area:right;">&#8594;</div>
-    <div></div>
-    <div class="touch-btn" data-key="down" style="grid-area:down;">&#8595;</div>
-    <div></div>
+  <div id="joystick-base">
+    <div id="joystick-thumb"></div>
   </div>
   <div style="display:flex;align-items:center;pointer-events:auto;">
     <div class="touch-btn" id="touch-fire-btn" style="width:80px;height:80px;font-size:15px;letter-spacing:1px;font-family:'Orbitron',sans-serif;border-color:rgba(255,46,135,0.7);background:rgba(255,46,135,0.08);color:#ff2e87;box-shadow:0 0 14px rgba(255,46,135,0.3);">FIRE</div>
@@ -439,6 +493,206 @@
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
+
+  // ============================================================
+  //  AUDIO ENGINE (procedural Web Audio — no files)
+  // ============================================================
+  const Audio = (function(){
+    let ctx = null;
+    let master = null;        // master gain (mute switch)
+    let musicGain = null;     // music bus
+    let sfxGain = null;       // sfx bus
+    let enabled = true;       // chosen on the loading screen
+    let started = false;      // music loop running
+    let musicNodes = [];      // persistent oscillators
+    let intensity = 0;        // 0..1, driven by game speed
+    let filterNode = null;
+    let arpTimer = null;
+
+    // Tron-ish progression (root notes, Hz) — minor, brooding
+    const BASS_SEQ = [55.00, 55.00, 48.99, 51.91]; // A1, A1, G1, G#1
+    const ARP_SCALE = [220.00, 261.63, 329.63, 392.00, 440.00, 329.63, 261.63, 220.00]; // A minor-ish
+    let seqStep = 0;
+    let arpStep = 0;
+
+    function ensureCtx(){
+      if (ctx) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) { enabled = false; return; }
+      ctx = new AC();
+      master = ctx.createGain();
+      master.gain.value = enabled ? 1 : 0;
+      master.connect(ctx.destination);
+
+      musicGain = ctx.createGain();
+      musicGain.gain.value = 0.0;
+      sfxGain = ctx.createGain();
+      sfxGain.gain.value = 0.9;
+      musicGain.connect(master);
+      sfxGain.connect(master);
+    }
+
+    function setEnabled(on){
+      enabled = on;
+      if (master) master.gain.setTargetAtTime(on ? 1 : 0, ctx.currentTime, 0.02);
+    }
+    function isEnabled(){ return enabled; }
+
+    // resume must happen after a user gesture
+    function resume(){
+      ensureCtx();
+      if (ctx && ctx.state === 'suspended') ctx.resume();
+    }
+
+    // ---- SFX: laser zap (light, spritey descending blip) ----
+    function laser(level){
+      if (!ctx || !enabled) return;
+      const t = ctx.currentTime;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'square';
+      // higher level = slightly lower, beefier pitch
+      const base = 1400 - Math.min((level||1)-1, 4) * 120;
+      o.frequency.setValueAtTime(base, t);
+      o.frequency.exponentialRampToValueAtTime(base * 0.35, t + 0.12);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.32, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+      // a touch of sparkle
+      const o2 = ctx.createOscillator();
+      o2.type = 'triangle';
+      o2.frequency.setValueAtTime(base * 2, t);
+      o2.frequency.exponentialRampToValueAtTime(base * 0.8, t + 0.1);
+      const g2 = ctx.createGain();
+      g2.gain.setValueAtTime(0.12, t);
+      g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+      o.connect(g); g.connect(sfxGain);
+      o2.connect(g2); g2.connect(sfxGain);
+      o.start(t); o2.start(t);
+      o.stop(t + 0.18); o2.stop(t + 0.14);
+    }
+
+    // ---- SFX: soft explosion / poof (filtered noise burst) ----
+    function poof(big){
+      if (!ctx || !enabled) return;
+      const t = ctx.currentTime;
+      const dur = big ? 0.55 : 0.32;
+      const frames = Math.floor(ctx.sampleRate * dur);
+      const buffer = ctx.createBuffer(1, frames, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < frames; i++) {
+        // soft noise that fades out
+        const env = Math.pow(1 - i/frames, 2);
+        data[i] = (Math.random()*2 - 1) * env;
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(big ? 900 : 1300, t);
+      lp.frequency.exponentialRampToValueAtTime(big ? 160 : 320, t + dur);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(big ? 0.5 : 0.32, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      src.connect(lp); lp.connect(g); g.connect(sfxGain);
+      src.start(t);
+      src.stop(t + dur + 0.02);
+    }
+
+    // ---- Music: looping Tron-style bed that intensifies with speed ----
+    function startMusic(){
+      if (!ctx || started) return;
+      started = true;
+
+      // shared lowpass that opens up as intensity rises
+      filterNode = ctx.createBiquadFilter();
+      filterNode.type = 'lowpass';
+      filterNode.frequency.value = 500;
+      filterNode.Q.value = 6;
+      filterNode.connect(musicGain);
+
+      // --- droning detuned saw pad (kept low so it doesn't mask the progression) ---
+      const padFreqs = [110, 110.4, 164.81]; // A2, slightly detuned, + E3
+      for (const f of padFreqs) {
+        const o = ctx.createOscillator();
+        o.type = 'sawtooth';
+        o.frequency.value = f;
+        const g = ctx.createGain();
+        g.gain.value = 0.022;
+        o.connect(g); g.connect(filterNode);
+        o.start();
+        musicNodes.push(o);
+      }
+
+      // --- pulsing bass via LFO on a dedicated gain ---
+      const bass = ctx.createOscillator();
+      bass.type = 'sawtooth';
+      bass.frequency.value = BASS_SEQ[0];
+      const bassGain = ctx.createGain();
+      bassGain.gain.value = 0.12;
+      bass.connect(bassGain); bassGain.connect(filterNode);
+      bass.start();
+      musicNodes.push(bass);
+
+      // 16th-note arp + bass sequencer (driven by setInterval, tempo-locked)
+      const stepMs = 150; // ~100 BPM 16ths
+      arpTimer = setInterval(() => {
+        if (!ctx) return;
+        const t = ctx.currentTime;
+        // advance bass note every 8 steps
+        if (arpStep % 8 === 0) {
+          seqStep = (seqStep + 1) % BASS_SEQ.length;
+          bass.frequency.setTargetAtTime(BASS_SEQ[seqStep], t, 0.02);
+        }
+        // arp blip — louder/brighter as intensity rises.
+        // Routed directly to the music bus (bypassing the lowpass) so the
+        // higher-pitched melody always cuts through the low drone.
+        const note = ARP_SCALE[arpStep % ARP_SCALE.length];
+        const o = ctx.createOscillator();
+        o.type = 'square';
+        o.frequency.value = note * (1 + 0.5 * (arpStep % 2)); // octave bounce
+        const g = ctx.createGain();
+        const amp = 0.05 + intensity * 0.07;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(amp, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+        // gentle highpass keeps it crisp and out of the bass's way
+        const hp = ctx.createBiquadFilter();
+        hp.type = 'highpass';
+        hp.frequency.value = 180;
+        o.connect(hp); hp.connect(g); g.connect(musicGain);
+        o.start(t); o.stop(t + 0.16);
+        arpStep++;
+      }, stepMs);
+
+      // fade music in
+      musicGain.gain.setTargetAtTime(0.5, ctx.currentTime, 0.6);
+    }
+
+    function stopMusic(){
+      if (!started) return;
+      started = false;
+      if (arpTimer) { clearInterval(arpTimer); arpTimer = null; }
+      for (const n of musicNodes) { try { n.stop(); } catch(e){} }
+      musicNodes = [];
+      if (musicGain) musicGain.gain.setTargetAtTime(0.0, ctx.currentTime, 0.2);
+    }
+
+    // called each frame with 0..1 intensity (from game speed)
+    function setIntensity(v){
+      intensity = Math.max(0, Math.min(1, v));
+      if (filterNode && ctx) {
+        // open the filter and add motion as the game speeds up
+        const target = 500 + intensity * 2600;
+        filterNode.frequency.setTargetAtTime(target, ctx.currentTime, 0.2);
+      }
+      if (musicGain && ctx && started) {
+        musicGain.gain.setTargetAtTime(0.42 + intensity * 0.28, ctx.currentTime, 0.3);
+      }
+    }
+
+    return { resume, setEnabled, isEnabled, laser, poof, startMusic, stopMusic, setIntensity };
+  })();
 
   // ============================================================
   //  BACKGROUND GRADIENT
@@ -674,7 +928,17 @@
   const obstacleRadii = [1.3, 1.15, 1.05, 1.3, 1.2, 1.05];
   const obstacleColors = [0xff2e87, 0xffde2e, 0x00f0ff, 0xb829ff, 0xff6b35];
 
+  // boss config: a large cube that takes 3 hits. Index 3 (BoxGeometry) is the base shape.
+  const BOSS_GEO = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+  const BOSS_SCALE = 4;          // ~4x bigger than a normal block
+  const BOSS_BASE_RADIUS = 1.3;  // same base as the box, scaled up at runtime
+  const BOSS_MAX_HP = 3;
+  // colours by remaining HP: 3 = red, 2 = orange, 1 = yellow
+  const BOSS_HP_COLORS = { 3: 0xff2233, 2: 0xff6b35, 1: 0xffde2e };
+
   function resetObstacle(group, initial){
+    // clear any boss state so a reused slot becomes a normal obstacle again
+    if (group.userData.isBoss) clearBoss(group);
     const scale = 0.8 + Math.random() * 0.9;
     group.scale.setScalar(scale);
     group.userData.scaledRadius = group.userData.baseRadius * scale;
@@ -690,14 +954,19 @@
     const color = obstacleColors[Math.floor(Math.random() * obstacleColors.length)];
 
     const fillMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.12, side: THREE.DoubleSide });
-    group.add(new THREE.Mesh(obstacleGeoms[idx], fillMat));
+    const fillMesh = new THREE.Mesh(obstacleGeoms[idx], fillMat);
+    group.add(fillMesh);
 
     const edges = new THREE.EdgesGeometry(obstacleGeoms[idx]);
     const lineMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.95 });
-    group.add(new THREE.LineSegments(edges, lineMat));
+    const edgeMesh = new THREE.LineSegments(edges, lineMat);
+    group.add(edgeMesh);
 
     group.userData = {
       baseRadius: obstacleRadii[idx],
+      normalBaseRadius: obstacleRadii[idx],
+      fillMesh, edgeMesh,
+      isBoss: false, hp: 0, hitFlash: 0,
       rotSpeed: {
         x: (Math.random() - 0.5) * 1.4,
         y: (Math.random() - 0.5) * 1.4,
@@ -707,6 +976,58 @@
     resetObstacle(group, true);
     scene.add(group);
     return group;
+  }
+
+  // Convert an obstacle slot into a boss cube spawned dead ahead in the player's path.
+  function makeBoss(group){
+    const ud = group.userData;
+    ud.isBoss = true;
+    ud.hp = BOSS_MAX_HP;
+    ud.hitFlash = 0;
+
+    // swap geometry to the big cube
+    ud.fillMesh.geometry = BOSS_GEO;
+    ud.edgeMesh.geometry = new THREE.EdgesGeometry(BOSS_GEO);
+
+    group.scale.setScalar(BOSS_SCALE);
+    ud.baseRadius = BOSS_BASE_RADIUS;
+    ud.scaledRadius = BOSS_BASE_RADIUS * BOSS_SCALE;
+
+    // colour for full HP
+    const c = BOSS_HP_COLORS[BOSS_MAX_HP];
+    ud.fillMesh.material.color.setHex(c);
+    ud.fillMesh.material.opacity = 0.18;
+    ud.edgeMesh.material.color.setHex(c);
+
+    // spawn it ahead and roughly in the player's lane
+    group.position.x = THREE.MathUtils.clamp(ship.position.x + (Math.random()-0.5)*4, -5, 5);
+    group.position.y = THREE.MathUtils.clamp(ship.position.y + (Math.random()-0.5)*3, 1.5, 5.5);
+    group.position.z = -230 - Math.random() * 30;
+    group.rotation.set(0, 0, 0);
+    // slow, menacing tumble
+    ud.rotSpeed = { x: 0.15, y: 0.2, z: 0.1 };
+  }
+
+  function clearBoss(group){
+    const ud = group.userData;
+    ud.isBoss = false;
+    ud.hp = 0;
+    ud.hitFlash = 0;
+    // restore a normal random shape
+    const idx = Math.floor(Math.random() * obstacleGeoms.length);
+    const color = obstacleColors[Math.floor(Math.random() * obstacleColors.length)];
+    ud.fillMesh.geometry = obstacleGeoms[idx];
+    ud.edgeMesh.geometry = new THREE.EdgesGeometry(obstacleGeoms[idx]);
+    ud.fillMesh.material.color.setHex(color);
+    ud.fillMesh.material.opacity = 0.12;
+    ud.edgeMesh.material.color.setHex(color);
+    ud.baseRadius = obstacleRadii[idx];
+    ud.normalBaseRadius = obstacleRadii[idx];
+    ud.rotSpeed = {
+      x: (Math.random() - 0.5) * 1.4,
+      y: (Math.random() - 0.5) * 1.4,
+      z: (Math.random() - 0.5) * 1.4
+    };
   }
 
   const OBSTACLE_COUNT = 18;
@@ -778,18 +1099,57 @@
     if (k) { keys[k] = false; e.preventDefault(); }
   });
 
-  // touch controls
-  document.querySelectorAll('.touch-btn').forEach(btn => {
-    const k = btn.dataset.key;
-    if (!k) return;
-    const set = (v) => (e) => { e.preventDefault(); keys[k] = v; };
-    btn.addEventListener('touchstart', set(true), { passive: false });
-    btn.addEventListener('touchend', set(false), { passive: false });
-    btn.addEventListener('touchcancel', set(false), { passive: false });
-    btn.addEventListener('mousedown', set(true));
-    btn.addEventListener('mouseup', set(false));
-    btn.addEventListener('mouseleave', set(false));
-  });
+  // touch joystick (analog) — writes to touchInput.x / touchInput.y in -1..1
+  const touchInput = { x: 0, y: 0 };
+  const joyBase = document.getElementById('joystick-base');
+  const joyThumb = document.getElementById('joystick-thumb');
+  let joyActiveId = null;
+  const JOY_RADIUS = 46; // max thumb travel in px
+
+  function joyCenter(){
+    const r = joyBase.getBoundingClientRect();
+    return { x: r.left + r.width/2, y: r.top + r.height/2 };
+  }
+  function joyMove(clientX, clientY){
+    const c = joyCenter();
+    let dx = clientX - c.x;
+    let dy = clientY - c.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > JOY_RADIUS) { dx = dx / dist * JOY_RADIUS; dy = dy / dist * JOY_RADIUS; }
+    joyThumb.style.transform = `translate(${dx}px, ${dy}px)`;
+    touchInput.x = dx / JOY_RADIUS;
+    touchInput.y = dy / JOY_RADIUS;
+  }
+  function joyReset(){
+    joyActiveId = null;
+    touchInput.x = 0; touchInput.y = 0;
+    joyThumb.style.transform = 'translate(0px, 0px)';
+  }
+  joyBase.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    joyActiveId = t.identifier;
+    joyMove(t.clientX, t.clientY);
+  }, { passive: false });
+  joyBase.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      if (t.identifier === joyActiveId) { joyMove(t.clientX, t.clientY); break; }
+    }
+  }, { passive: false });
+  const joyEnd = (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === joyActiveId) { joyReset(); break; }
+    }
+  };
+  joyBase.addEventListener('touchend', joyEnd, { passive: false });
+  joyBase.addEventListener('touchcancel', joyEnd, { passive: false });
+
+  // mouse fallback (for testing the joystick on desktop)
+  let joyMouseDown = false;
+  joyBase.addEventListener('mousedown', (e) => { e.preventDefault(); joyMouseDown = true; joyMove(e.clientX, e.clientY); });
+  window.addEventListener('mousemove', (e) => { if (joyMouseDown) joyMove(e.clientX, e.clientY); });
+  window.addEventListener('mouseup', () => { if (joyMouseDown) { joyMouseDown = false; joyReset(); } });
 
   // touch fire button
   const touchFireBtn = document.getElementById('touch-fire-btn');
@@ -937,6 +1297,18 @@
   document.getElementById('mode-desktop').addEventListener('click', () => { gameMode = 'desktop'; startGame(); });
   document.getElementById('mode-phone').addEventListener('click', () => { gameMode = 'phone'; startGame(); });
 
+  // sound on/off toggle (loading screen)
+  let soundOn = true;
+  const soundToggle = document.getElementById('sound-toggle');
+  soundToggle.addEventListener('click', () => {
+    soundOn = !soundOn;
+    soundToggle.classList.toggle('on', soundOn);
+    soundToggle.classList.toggle('off', !soundOn);
+    soundToggle.querySelector('.sound-toggle-text').textContent = soundOn ? 'ON' : 'OFF';
+    Audio.resume();
+    Audio.setEnabled(soundOn);
+  });
+
   // Probe WebXR support and wire the VR button accordingly
   if (navigator.xr && navigator.xr.isSessionSupported) {
     navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
@@ -967,6 +1339,7 @@
       session.addEventListener('end', () => {
         // returning from VR — show start screen again
         state = 'start';
+        Audio.stopMusic();
         reticleGroup.visible = false;
         hud.style.display = 'none';
         laserHud.style.display = 'none';
@@ -1021,6 +1394,7 @@
   let lastShotTime = -999;
   let currentSpeed = BASE_SPEED;
   let destroyedCount = 0;
+  let nextBossMilestone = 2; // next velocity multiplier (2.0x, 3.0x, ...) that spawns a boss
   const activeLasers = [];
   const impactFlashes = [];
 
@@ -1032,6 +1406,34 @@
     if (elapsed - lastShotTime < SHOT_COOLDOWN) return;
     lastShotTime = elapsed;
     spawnLaser();
+    Audio.laser(getLaserLevel());
+  }
+
+  // Add kills and fire the 5-kill milestone message for each multiple crossed.
+  function addKills(n){
+    const before = destroyedCount;
+    destroyedCount += n;
+    const crossed = Math.floor(destroyedCount / 5) - Math.floor(before / 5);
+    if (crossed > 0) {
+      milestoneDisplay.textContent = `LASER LV.${getLaserLevel()} · -0.1x VELOCITY!`;
+      clearTimeout(addKills._t);
+      addKills._t = setTimeout(() => { milestoneDisplay.textContent = ''; }, 2000);
+    }
+  }
+
+  // Spawn a boss by converting one obstacle slot. Prefer a slot that's far ahead
+  // and not already a boss, so we don't pop one in right on top of the player.
+  function spawnBoss(){
+    // don't stack bosses — at most one active at a time
+    if (obstacles.some(o => o.userData.isBoss)) return;
+    let candidate = null;
+    let bestZ = Infinity;
+    for (const ob of obstacles) {
+      if (ob.userData.isBoss) continue;
+      // pick the one furthest away (most negative z) so the swap is least jarring
+      if (ob.position.z < bestZ) { bestZ = ob.position.z; candidate = ob; }
+    }
+    if (candidate) makeBoss(candidate);
   }
 
   // laser level colours: magenta → orange → yellow → cyan → white
@@ -1108,6 +1510,7 @@
 
   function triggerImpact(pos, color){
     color = color || 0xff2e87;
+    Audio.poof(false);
 
     // --- central glow flash ---
     const spriteMat = new THREE.SpriteMaterial({
@@ -1186,6 +1589,13 @@
     distanceTraveled = 0;
     destroyedCount = 0;
     lastShotTime = -999;
+    nextBossMilestone = 2;
+
+    // audio: resume context (user gesture) and (re)start the music bed
+    Audio.resume();
+    Audio.setEnabled(soundOn);
+    Audio.setIntensity(0);
+    Audio.startMusic();
 
     // clear active lasers
     for (const laser of activeLasers) scene.remove(laser.group);
@@ -1230,6 +1640,8 @@
   function endGame(){
     state = 'gameover';
     triggerExplosion(ship.position);
+    Audio.poof(true);
+    Audio.stopMusic();
     ship.visible = false;
     glowSprite.visible = false;
 
@@ -1273,9 +1685,20 @@
       elapsed += delta;
       const speedPenalty = Math.floor(destroyedCount / 5) * 0.1 * BASE_SPEED;
       let speed = Math.min(MAX_SPEED, Math.max(BASE_SPEED, BASE_SPEED + elapsed * ACCEL - speedPenalty));
+      // difficulty multiplier (independent of VR comfort scaling) drives boss milestones
+      const difficultyMult = speed / BASE_SPEED;
       if (gameMode === 'vr') speed *= VR_SPEED_FACTOR; // slightly slower in VR for comfort
       currentSpeed = speed;
       distanceTraveled += speed * delta;
+
+      // --- boss trigger: each time the multiplier first crosses 2.0x, 3.0x, ... ---
+      if (difficultyMult >= nextBossMilestone) {
+        spawnBoss();
+        nextBossMilestone += 1;
+      }
+
+      // music intensity ramps with difficulty (1.0x..~5.6x → 0..1)
+      Audio.setIntensity((difficultyMult - 1) / 4.6);
 
       // poll VR controllers (left stick = movement, right trigger = fire)
       if (gameMode === 'vr') pollVRInput();
@@ -1294,15 +1717,29 @@
         playerPos.x += jx * MOVE_SPEED * delta;
         playerPos.y -= jy * MOVE_SPEED * delta; // stick up (negative) = climb
       }
+      // phone analog joystick (x = strafe, y up = climb)
+      if (gameMode === 'phone') {
+        const dead = 0.1;
+        const jx = Math.abs(touchInput.x) > dead ? touchInput.x : 0;
+        const jy = Math.abs(touchInput.y) > dead ? touchInput.y : 0;
+        playerPos.x += jx * MOVE_SPEED * delta;
+        playerPos.y -= jy * MOVE_SPEED * delta; // thumb up (negative) = climb
+      }
 
       playerPos.x = THREE.MathUtils.clamp(playerPos.x, BOUNDS.xMin, BOUNDS.xMax);
       playerPos.y = THREE.MathUtils.clamp(playerPos.y, BOUNDS.yMin, BOUNDS.yMax);
 
       ship.position.lerp(playerPos, Math.min(1, delta * 14));
 
-      // banking / pitch
-      const targetRoll = ((keys.left?1:0) - (keys.right?1:0)) * 0.5;
-      const targetPitch = ((keys.up?1:0) - (keys.down?1:0)) * -0.35;
+      // banking / pitch — combine keyboard + analog stick input
+      let bankX = (keys.left?1:0) - (keys.right?1:0);
+      let pitchX = (keys.up?1:0) - (keys.down?1:0);
+      if (gameMode === 'phone') { bankX -= touchInput.x; pitchX -= touchInput.y; }
+      if (gameMode === 'vr')    { bankX -= vrInput.x;    pitchX -= vrInput.y; }
+      bankX = THREE.MathUtils.clamp(bankX, -1, 1);
+      pitchX = THREE.MathUtils.clamp(pitchX, -1, 1);
+      const targetRoll = bankX * 0.5;
+      const targetPitch = pitchX * -0.35;
       ship.rotation.z += (targetRoll - ship.rotation.z) * Math.min(1, delta*6);
       ship.rotation.x += (targetPitch - ship.rotation.x) * Math.min(1, delta*6);
       ship.rotation.y += delta * 0.6;
@@ -1332,6 +1769,18 @@
         ob.rotation.y += ob.userData.rotSpeed.y * delta;
         ob.rotation.z += ob.userData.rotSpeed.z * delta;
 
+        // boss hit-flash: briefly blow out to white, then settle to HP colour
+        if (ob.userData.isBoss && ob.userData.hitFlash > 0) {
+          ob.userData.hitFlash = Math.max(0, ob.userData.hitFlash - delta * 4);
+          const f = ob.userData.hitFlash;
+          const base = new THREE.Color(BOSS_HP_COLORS[ob.userData.hp] || 0xffde2e);
+          const white = new THREE.Color(0xffffff);
+          const mixed = base.clone().lerp(white, f);
+          ob.userData.fillMesh.material.color.copy(mixed);
+          ob.userData.edgeMesh.material.color.copy(mixed);
+          ob.userData.fillMesh.material.opacity = 0.18 + f * 0.5;
+        }
+
         if (ob.position.z > 12) {
           resetObstacle(ob, false);
           continue;
@@ -1343,9 +1792,19 @@
         if (Math.abs(dz) < window_) {
           const dx = ob.position.x - ship.position.x;
           const dy = ob.position.y - ship.position.y;
-          const distXY = Math.sqrt(dx*dx + dy*dy);
-          if (distXY < (ob.userData.scaledRadius + SHIP_RADIUS) * 0.82) {
-            endGame();
+          if (ob.userData.isBoss) {
+            // axis-aligned box check for the cube (half-extent = 0.75 * scale)
+            const half = 0.75 * BOSS_SCALE * 0.9; // 0.9 = slight forgiveness
+            if (Math.abs(dx) < half + SHIP_RADIUS &&
+                Math.abs(dy) < half + SHIP_RADIUS &&
+                Math.abs(dz) < half + SHIP_RADIUS) {
+              endGame();
+            }
+          } else {
+            const distXY = Math.sqrt(dx*dx + dy*dy);
+            if (distXY < (ob.userData.scaledRadius + SHIP_RADIUS) * 0.82) {
+              endGame();
+            }
           }
         }
       }
@@ -1374,18 +1833,32 @@
           const dz = ob.position.z - laser.group.position.z;
           const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
           if (dist < ob.userData.scaledRadius * 0.85 + laser.radius) {
-            // hit!
             triggerImpact(laser.group.position.clone(), laser.color);
             removeLaser(laser);
             activeLasers.splice(li, 1);
-            resetObstacle(ob, false);
-            destroyedCount++;
-            // milestone: every 5 kills = +1 laser level, -0.1x velocity
-            if (destroyedCount % 5 === 0) {
-              milestoneDisplay.textContent = `LASER LV.${getLaserLevel()} · -0.1x VELOCITY!`;
-              setTimeout(() => { milestoneDisplay.textContent = ''; }, 2000);
-            }
             hit = true;
+
+            if (ob.userData.isBoss) {
+              // boss takes damage rather than dying instantly
+              ob.userData.hp -= 1;
+              ob.userData.hitFlash = 1;
+              if (ob.userData.hp <= 0) {
+                // boss destroyed → big explosion, counts as 3 kills
+                triggerImpact(ob.position.clone(), 0xffde2e);
+                triggerImpact(ob.position.clone(), 0xff6b35);
+                resetObstacle(ob, false);
+                addKills(3);
+              } else {
+                // shift colour to show remaining HP
+                const c = BOSS_HP_COLORS[ob.userData.hp];
+                ob.userData.fillMesh.material.color.setHex(c);
+                ob.userData.edgeMesh.material.color.setHex(c);
+              }
+            } else {
+              // normal obstacle: instant destruction, counts as 1 kill
+              resetObstacle(ob, false);
+              addKills(1);
+            }
             break;
           }
         }
@@ -1463,12 +1936,18 @@
         const pulse = 0.9 + Math.sin(performance.now() * 0.006) * 0.1;
         reticleGroup.scale.setScalar(pulse);
       } else {
+        // desktop & phone camera
+        const portrait = window.innerHeight > window.innerWidth;
+        // On a portrait phone, lift the framing so the action sits in the upper
+        // portion of the screen, above the joystick/fire controls.
+        const yLift = (gameMode === 'phone' && portrait) ? 2.3 : 1.7;
+        const lookYOffset = (gameMode === 'phone' && portrait) ? -1.6 : -0.2;
         const camTargetX = playerPos.x * 0.55;
-        const camTargetY = playerPos.y + 1.7;
+        const camTargetY = playerPos.y + yLift;
         camera.position.x += (camTargetX - camera.position.x) * Math.min(1, delta*4);
         camera.position.y += (camTargetY - camera.position.y) * Math.min(1, delta*4);
         camera.position.z = 7.5;
-        camera.lookAt(playerPos.x * 0.3, playerPos.y - 0.2, -30);
+        camera.lookAt(playerPos.x * 0.3, playerPos.y + lookYOffset, -30);
       }
 
       // --- HUD (DOM overlay; not visible in VR, so skip) ---
