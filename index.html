@@ -27,6 +27,7 @@
     --td-accent:  #ff5b5b;
     --ab-accent:  #b388ff;
     --cr-accent:  #e8803a;
+    --gs-accent:  #d3dae6;
   }
 
   *{ box-sizing: border-box; }
@@ -283,6 +284,7 @@
   .cabinet.td{  --accent: var(--td-accent); }
   .cabinet.ab{  --accent: var(--ab-accent); }
   .cabinet.cr{  --accent: var(--cr-accent); }
+  .cabinet.gs{  --accent: var(--gs-accent); }
 
   /* ---------- Footer ---------- */
   footer{
@@ -976,10 +978,113 @@
         <div class="play"><span>Ride the Rails</span><span class="arrow">▶</span></div>
       </a>
 
+      <!-- ============ GRAVITY SLINGSHOT ============ -->
+      <a class="cabinet gs" href="GS-1.html" aria-label="Play Gravity Slingshot">
+        <div class="screen">
+          <span class="badge">VR READY</span>
+          <svg viewBox="0 0 400 250" role="img" aria-label="A probe's trajectory slingshotting around a planet's gravity well toward a glowing target">
+            <defs>
+              <radialGradient id="gsBg" cx="50%" cy="40%" r="80%">
+                <stop offset="0%" stop-color="#0f1430"/>
+                <stop offset="100%" stop-color="#03030a"/>
+              </radialGradient>
+              <radialGradient id="gsPlanet" cx="38%" cy="32%" r="75%">
+                <stop offset="0%" stop-color="#6fe0ec"/>
+                <stop offset="55%" stop-color="#2a8fb0"/>
+                <stop offset="100%" stop-color="#103a55"/>
+              </radialGradient>
+              <radialGradient id="gsPlanet2" cx="40%" cy="34%" r="75%">
+                <stop offset="0%" stop-color="#e89a6a"/>
+                <stop offset="100%" stop-color="#6e2c1e"/>
+              </radialGradient>
+              <radialGradient id="gsTarget" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#ffffff"/>
+                <stop offset="55%" stop-color="#d3dae6"/>
+                <stop offset="100%" stop-color="#d3dae6" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+
+            <rect width="400" height="250" fill="url(#gsBg)"/>
+
+            <!-- stars -->
+            <g fill="#ffffff">
+              <circle cx="36" cy="40" r="1.3" opacity="0.8"/>
+              <circle cx="110" cy="150" r="1" opacity="0.6"/>
+              <circle cx="160" cy="36" r="1.2" opacity="0.7"/>
+              <circle cx="300" cy="190" r="1.3" opacity="0.8"/>
+              <circle cx="330" cy="120" r="1" opacity="0.6"/>
+              <circle cx="190" cy="210" r="1.1" opacity="0.7"/>
+              <circle cx="78" cy="120" r="1" opacity="0.6"/>
+              <circle cx="370" cy="170" r="1.2" opacity="0.7"/>
+              <circle cx="250" cy="40" r="1" opacity="0.6"/>
+            </g>
+
+            <!-- gravity-well rings around the big planet -->
+            <g fill="none" stroke="#d3dae6" stroke-dasharray="2 7">
+              <circle cx="235" cy="120" r="58" opacity="0.28"/>
+              <circle cx="235" cy="120" r="76" opacity="0.16"/>
+              <circle cx="235" cy="120" r="96" opacity="0.08"/>
+            </g>
+
+            <!-- second planet -->
+            <circle cx="92" cy="66" r="19" fill="url(#gsPlanet2)"/>
+            <ellipse cx="86" cy="60" rx="6" ry="3" fill="#f2c39a" opacity="0.5"/>
+
+            <!-- big planet -->
+            <circle cx="235" cy="120" r="42" fill="url(#gsPlanet)"/>
+            <g stroke="#0d3148" stroke-width="2.5" opacity="0.4" fill="none">
+              <path d="M196,112 q39,-12 78,2"/>
+              <path d="M198,128 q37,10 74,-2"/>
+              <path d="M205,140 q30,9 58,1"/>
+            </g>
+            <ellipse cx="222" cy="104" rx="11" ry="6" fill="#bff2f8" opacity="0.35"/>
+
+            <!-- trajectory glow underlay -->
+            <path d="M58,200 C140,216 196,206 224,176 C262,150 292,150 296,112 C300,80 320,66 360,52"
+                  fill="none" stroke="#d3dae6" stroke-width="5" opacity="0.12" stroke-linecap="round"/>
+            <!-- dotted trajectory -->
+            <path d="M58,200 C140,216 196,206 224,176 C262,150 292,150 296,112 C300,80 320,66 360,52"
+                  fill="none" stroke="#eef2f8" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="2 6"/>
+
+            <!-- launch pad + probe at the start -->
+            <g>
+              <rect x="40" y="206" width="34" height="7" rx="2" fill="#3a4150" stroke="#10141c" stroke-width="1"/>
+              <rect x="44" y="200" width="6" height="7" fill="#565f70"/>
+              <rect x="64" y="200" width="6" height="7" fill="#565f70"/>
+              <!-- probe -->
+              <g transform="rotate(-32 58 196)">
+                <polygon points="58,186 64,202 58,198 52,202" fill="#d3dae6" stroke="#aeb6c4" stroke-width="1"/>
+                <circle cx="58" cy="193" r="2" fill="#6fe0ec"/>
+                <polygon points="54,202 58,198 62,202 58,210" fill="#ff9b3d" opacity="0.9"/>
+              </g>
+            </g>
+
+            <!-- direction arrowhead mid-arc -->
+            <polygon points="285,142 292,146 286,150" fill="#eef2f8" opacity="0.9"/>
+
+            <!-- glowing target -->
+            <circle cx="360" cy="52" r="20" fill="url(#gsTarget)" opacity="0.5"/>
+            <g fill="none" stroke="#eef2f8">
+              <circle cx="360" cy="52" r="11" stroke-width="2" opacity="0.9"/>
+              <circle cx="360" cy="52" r="6" stroke-width="1.5" opacity="0.7"/>
+            </g>
+            <circle cx="360" cy="52" r="2.4" fill="#ffffff"/>
+          </svg>
+        </div>
+        <div class="strip">
+          <h2>Gravity Slingshot</h2>
+        </div>
+        <div class="body">
+          <p>Launch a probe and let the planets do the work. Bend its path through their gravity wells, whip around the big ones, and thread it to the goal. The later levels — The Cage, Slalom — won't forgive a lazy shot.</p>
+          <div class="meta">GRAVITY PUZZLE · VR + BROWSER · SLINGSHOT PHYSICS</div>
+        </div>
+        <div class="play"><span>Launch the Probe</span><span class="arrow">▶</span></div>
+      </a>
+
     </main>
 
     <footer>
-      <span class="pulse">▸</span> 6 games loaded · built for headsets and browsers
+      <span class="pulse">▸</span> 7 games loaded · built for headsets and browsers
     </footer>
   </div>
 </body>

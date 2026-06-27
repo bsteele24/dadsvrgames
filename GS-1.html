@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Gravity Slingshot</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; overflow:hidden; background:#05060f;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:#eaf2ff; }
+  #app { position:fixed; inset:0; }
+  canvas { display:block; touch-action:none; }
+
+  #hud { position:fixed; top:14px; left:16px; z-index:10; pointer-events:none;
+    text-shadow:0 1px 6px rgba(0,0,0,.8); font-size:15px; line-height:1.5; }
+  #hud .lvl { font-size:19px; font-weight:700; letter-spacing:.5px; color:#7fd0ff; }
+  #hud .sub { opacity:.85; }
+  #hud .name { opacity:.6; font-size:12px; letter-spacing:2px; text-transform:uppercase; }
+
+  #tip { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); z-index:10;
+    pointer-events:none; font-size:13px; opacity:.7; text-align:center; max-width:90%;
+    text-shadow:0 1px 6px rgba(0,0,0,.9); }
+
+  #msg { position:fixed; inset:0; z-index:20; display:none; align-items:center; justify-content:center;
+    flex-direction:column; gap:18px; background:radial-gradient(ellipse at center, rgba(5,8,22,.55), rgba(3,4,12,.85)); }
+  #msg h1 { font-size:34px; font-weight:800; letter-spacing:1px; }
+  #msg p { opacity:.85; font-size:15px; }
+  #msg .row { display:flex; gap:12px; flex-wrap:wrap; justify-content:center; }
+  .btn { pointer-events:auto; cursor:pointer; border:1px solid rgba(127,208,255,.5);
+    background:rgba(127,208,255,.12); color:#eaf2ff; padding:12px 22px; border-radius:12px;
+    font-size:15px; font-weight:600; letter-spacing:.4px; transition:.15s;
+    -webkit-tap-highlight-color:transparent; }
+  .btn:hover { background:rgba(127,208,255,.24); }
+  .btn.primary { border-color:#7fd0ff; background:rgba(127,208,255,.28); }
+
+  #ctl { position:fixed; bottom:16px; right:16px; z-index:15; display:flex; gap:10px; }
+  #vrbtn { display:none; }
+
+  #levelsel { position:fixed; top:14px; right:16px; z-index:15; display:flex; align-items:center;
+    gap:8px; padding:7px 11px 7px 13px; border-radius:14px;
+    background:rgba(10,14,28,.55); border:1px solid rgba(255,255,255,.09);
+    backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); }
+  #levelsel .lslabel { font-size:10px; letter-spacing:2px; text-transform:uppercase;
+    color:#8fa6c8; pointer-events:none; }
+  #levelsel .lschips { display:flex; gap:6px; }
+  .lchip { pointer-events:auto; cursor:pointer; position:relative; width:26px; height:26px;
+    border-radius:8px; border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.04);
+    color:#aebfda; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center;
+    transition:.13s; -webkit-tap-highlight-color:transparent; }
+  .lchip:hover { background:rgba(255,255,255,.1); color:#eaf2ff; }
+  .lchip.done { color:#7fffb0; border-color:rgba(95,227,154,.45); background:rgba(95,227,154,.1); }
+  .lchip.done::after { content:"✓"; position:absolute; top:-5px; right:-5px; width:14px; height:14px;
+    border-radius:50%; background:#5fe39a; color:#06250f; font-size:9px; font-weight:800;
+    display:flex; align-items:center; justify-content:center; }
+  .lchip.active { border-color:#7fd0ff; background:rgba(127,208,255,.30); color:#fff;
+    box-shadow:0 0 10px rgba(127,208,255,.35); }
+
+  /* ---- Title / mode-select screen ---- */
+  #start { position:fixed; inset:0; z-index:30; display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(ellipse at 50% 34%, rgba(20,32,64,.55), rgba(3,4,12,.93)); }
+  .startcard { text-align:center; padding:28px; max-width:700px; }
+  .startname { font-size:clamp(38px,11vw,58px); font-weight:800; letter-spacing:.14em; color:#eaf2ff;
+    text-shadow:0 0 26px rgba(127,208,255,.45); line-height:1; }
+  .startname2 { font-size:clamp(38px,11vw,58px); font-weight:800; letter-spacing:.10em; line-height:1.04;
+    background:linear-gradient(90deg,#7fd0ff,#66ffb0); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .startsub { margin:16px auto 30px; opacity:.72; font-size:14px; letter-spacing:.4px; max-width:420px; }
+  .modes { display:flex; gap:16px; justify-content:center; flex-wrap:wrap; }
+  .modebtn { cursor:pointer; width:148px; padding:20px 14px; border-radius:16px;
+    border:1px solid rgba(127,208,255,.35); background:rgba(127,208,255,.07); color:#eaf2ff;
+    display:flex; flex-direction:column; align-items:center; gap:9px; transition:.15s;
+    -webkit-tap-highlight-color:transparent; }
+  .modebtn:hover { background:rgba(127,208,255,.18); border-color:#7fd0ff; transform:translateY(-3px); }
+  .modebtn svg { width:38px; height:38px; stroke:#7fd0ff; fill:none; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+  .modebtn span { font-size:17px; font-weight:700; letter-spacing:1px; }
+  .modebtn small { font-size:11px; opacity:.62; letter-spacing:.5px; }
+  .modebtn.disabled { opacity:.38; cursor:not-allowed; }
+  .modebtn.disabled:hover { transform:none; background:rgba(127,208,255,.07); border-color:rgba(127,208,255,.35); }
+
+  body:not(.started) #hud,
+  body:not(.started) #levelsel,
+  body:not(.started) #tip,
+  body:not(.started) #ctl { display:none; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div id="start">
+  <div class="startcard">
+    <div class="startname">GRAVITY</div>
+    <div class="startname2">SLINGSHOT</div>
+    <div class="startsub">Pull back, read the gravity wells, and settle the orb onto the landing pad.</div>
+    <div class="modes">
+      <button class="modebtn" id="modeDesktop">
+        <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="1.5"/><path d="M8 21h8M12 17v4"/></svg>
+        <span>Desktop</span><small>Mouse drag</small>
+      </button>
+      <button class="modebtn" id="modeMobile">
+        <svg viewBox="0 0 24 24"><rect x="6.5" y="2" width="11" height="20" rx="2.5"/><path d="M10.5 18.5h3"/></svg>
+        <span>Mobile</span><small>Touch drag</small>
+      </button>
+      <button class="modebtn" id="modeVR">
+        <svg viewBox="0 0 24 24"><path d="M3 9.5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-3.5l-3-2.6-3 2.6H5a2 2 0 0 1-2-2z"/></svg>
+        <span>VR</span><small id="vrnote">Quest / WebXR</small>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="hud">
+  <div class="name">Gravity Slingshot</div>
+  <div class="lvl" id="hudLevel">Level 1</div>
+  <div class="sub" id="hudStats">Attempts: 0</div>
+</div>
+
+<div id="levelsel"></div>
+
+<div id="tip">Drag back from the orb and release. Use gravity to curve onto the pad.</div>
+
+<div id="ctl">
+  <button class="btn" id="resetBtn">Reset</button>
+  <button class="btn" id="vrbtn">Enter VR</button>
+</div>
+
+<div id="msg">
+  <h1 id="msgTitle">Solved!</h1>
+  <p id="msgText"></p>
+  <div class="row">
+    <button class="btn" id="retryBtn">Retry</button>
+    <button class="btn primary" id="nextBtn">Next Level</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+"use strict";
+
+/* =========================================================================
+   CONFIG  —  all tunable values live here.
+   Brad: tweak these to dial in feel after a live VR test.
+   ========================================================================= */
+const CONFIG = {
+  // physics (exaggerated arcade gravity)
+  G:               10.8,   // global gravity strength multiplier (+20% reach)
+  SUBSTEPS:        5,      // physics substeps per frame (stability)
+  MIN_R:           1.3,    // min distance clamp so close passes don't explode
+  BALL_RADIUS:     0.35,   // projectile radius (level units)
+
+  // slingshot / launch
+  MAX_STRETCH:     5.0,    // max pull-back distance (level units)
+  POWER:           2.55,   // launch speed per unit of stretch
+  GRAB_RADIUS:     2.2,    // VR: how close controller must be to grab the orb
+
+  // win / fail
+  CAPTURE_RADIUS:  1.7,    // enter this distance from pad center to win (speed ignored)
+  BOUND_RADIUS:    62,     // beyond this from origin -> lost in space (fail)
+  MAX_FLIGHT_TIME: 22,     // seconds before an in-flight orb auto-fails
+
+  // trajectory preview (short)
+  PREVIEW_DT:       0.022,
+  PREVIEW_STEPS_SIM:120,
+  PREVIEW_STEPS_SHOW:26,   // how many points to DRAW (short = first bit of arc)
+
+  // trail
+  TRAIL_MAX:        900,
+
+  // VR diorama presentation
+  VR_SCALE:         0.058, // shrink the whole level into a tabletop
+  VR_TABLE_Y:       1.02,  // height of the diorama (meters)
+  VR_FORWARD:       0.50,  // how far in front of the player (meters)
+};
+
+/* =========================================================================
+   LEVELS  —  hand-built puzzles, positions in the y=0 plane (x, z).
+   ========================================================================= */
+function P(x,z,radius,mass,type,color){ return {x,z,radius,mass,type,color}; }
+const LEVELS = [
+  { name:"First Pull",
+    anchor:{x:-15,z:6}, target:{x:15,z:-4},
+    planets:[ P(0,0, 2.6, 6.0,'rock',0xb07a4a) ], par:2 },
+
+  { name:"Switchback",
+    anchor:{x:-17,z:0}, target:{x:17,z:0},
+    planets:[ P(-5,-1.2, 2.6, 7.0,'rock',0xa86a4a),
+              P(5, 1.2, 2.6, 7.0,'ice',0x8fd3e6) ], par:2 },
+
+  { name:"Slingshot Assist",
+    anchor:{x:-16,z:8}, target:{x:14,z:11},
+    planets:[ P(-2,-4, 3.6, 13.0,'gas',0xc77b3a),
+              P(11,-2, 1.6, 3.0,'rock',0x7e8a99) ], par:2 },
+
+  { name:"The Relay",
+    anchor:{x:-18,z:-7}, target:{x:16,z:9},
+    planets:[ P(-9,-4, 2.3, 7.0,'gas',0xd6a24c),
+              P(-1, 1, 2.7, 8.5,'rock',0xb07a4a),
+              P(9, 7, 2.2, 7.0,'ice',0x88c8e0) ], par:3 },
+
+  { name:"The Cluster",
+    anchor:{x:-17,z:-9}, target:{x:15,z:10},
+    planets:[ P(-4,2, 2.4, 6.0,'rock',0xa86a4a),
+              P(4,-3, 2.8, 8.0,'gas',0xd9b65a),
+              P(8,7, 2.0, 4.5,'ice',0x88c8e0) ], par:3 },
+
+  { name:"Grand Tour",
+    anchor:{x:-19,z:-9}, target:{x:17,z:10},
+    planets:[ P(-12,-6, 2.0, 6.0,'rock',0x9a6b4a),
+              P(-5,-1, 2.5, 8.0,'gas',0xd6a24c),
+              P(5, 5, 2.4, 8.0,'ice',0x88c8e0),
+              P(12, 7, 2.0, 6.0,'rock',0xa86a4a) ], par:3 },
+
+  // ---- new: caged target — only reachable by threading several wells ----
+  { name:"The Cage",
+    anchor:{x:-18,z:-1}, target:{x:10,z:0},
+    planets:[ P(-3,1, 3.2, 13.0,'gas',0xc77b3a),
+              P(10,5.5, 2.4, 9.0,'ice',0x88c8e0),
+              P(10,-5.5,2.4, 9.0,'rock',0xa86a4a),
+              P(16,0, 2.4, 9.0,'rock',0x7e8a99) ], par:4 },
+
+  // ---- new: slalom — weave past four worlds in succession ----
+  { name:"Slalom",
+    anchor:{x:-18,z:7}, target:{x:16,z:-8},
+    planets:[ P(-6,1, 3.2, 13.0,'gas',0xd6a24c),
+              P(3,7, 2.6, 10.0,'ice',0x8fd3e6),
+              P(7,-4, 2.8, 11.0,'rock',0xb07a4a),
+              P(15,1, 2.2, 8.0,'rock',0x9a6b4a) ], par:4 },
+];
+
+/* =========================================================================
+   RENDERER / SCENE
+   ========================================================================= */
+const app = document.getElementById('app');
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.xr.enabled = true;
+if (renderer.xr.setFoveation) renderer.xr.setFoveation(1.0);
+app.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x05060f);
+// no FogExp2 — it washes out the starfield/planets.
+
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth/window.innerHeight, 0.05, 4000);
+
+// worldGroup holds the whole level: identity on desktop, scaled diorama in VR.
+const worldGroup = new THREE.Group();
+scene.add(worldGroup);
+
+// dolly so the XR camera + head-locked panel travel together
+const playerDolly = new THREE.Group();
+playerDolly.add(camera);
+scene.add(playerDolly);
+
+/* lighting */
+scene.add(new THREE.AmbientLight(0x404a66, 0.9));
+const sun = new THREE.DirectionalLight(0xfff2e0, 1.5);
+sun.position.set(-30, 40, 25); scene.add(sun);
+const fill = new THREE.DirectionalLight(0x668cff, 0.35);
+fill.position.set(20, -10, -20); scene.add(fill);
+
+/* starfield */
+(function buildStars(){
+  const N=2200, geo=new THREE.BufferGeometry(), pos=new Float32Array(N*3), col=new Float32Array(N*3), c=new THREE.Color();
+  for (let i=0;i<N;i++){
+    const r=600+Math.random()*900, u=Math.random()*2-1, t=Math.random()*Math.PI*2, s=Math.sqrt(1-u*u);
+    pos[i*3]=r*s*Math.cos(t); pos[i*3+1]=r*u; pos[i*3+2]=r*s*Math.sin(t);
+    c.setHSL(0.55+Math.random()*0.12, 0.4*Math.random(), 0.6+Math.random()*0.4);
+    col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col,3));
+  scene.add(new THREE.Points(geo, new THREE.PointsMaterial({ size:2.4, sizeAttenuation:false, vertexColors:true, transparent:true, opacity:0.9, depthWrite:false })));
+})();
+
+/* distant sun glow */
+(function buildSunGlow(){
+  const cv=document.createElement('canvas'); cv.width=cv.height=128;
+  const g=cv.getContext('2d'), grd=g.createRadialGradient(64,64,4,64,64,64);
+  grd.addColorStop(0,'rgba(255,250,235,1)'); grd.addColorStop(0.25,'rgba(255,224,170,0.7)'); grd.addColorStop(1,'rgba(255,200,120,0)');
+  g.fillStyle=grd; g.fillRect(0,0,128,128);
+  const spr=new THREE.Sprite(new THREE.SpriteMaterial({ map:new THREE.CanvasTexture(cv), transparent:true, depthWrite:false, blending:THREE.AdditiveBlending }));
+  spr.scale.set(220,220,1); spr.position.copy(sun.position).multiplyScalar(14); scene.add(spr);
+})();
+
+/* =========================================================================
+   PROCEDURAL PLANET TEXTURES
+   ========================================================================= */
+function makePlanetTexture(type, baseHex){
+  const S=256, cv=document.createElement('canvas'); cv.width=cv.height=S;
+  const g=cv.getContext('2d'), base=new THREE.Color(baseHex), hsl={}; base.getHSL(hsl);
+  const shade=l=>'#'+new THREE.Color().setHSL(hsl.h,hsl.s,Math.max(0,Math.min(1,l))).getHexString();
+  g.fillStyle=shade(hsl.l); g.fillRect(0,0,S,S);
+
+  if (type==='gas'){
+    let y=0;
+    while (y<S){ const h=6+Math.random()*22; g.fillStyle=shade(hsl.l+(Math.random()-0.5)*0.35); g.fillRect(0,y,S,h); y+=h; }
+    for (let i=0;i<40;i++){ g.globalAlpha=0.06+Math.random()*0.08; g.fillStyle=shade(hsl.l+0.25);
+      g.beginPath(); g.ellipse(Math.random()*S, Math.random()*S, 30+Math.random()*60, 4+Math.random()*10, 0,0,7); g.fill(); }
+    g.globalAlpha=1;
+  } else if (type==='ice'){
+    for (let i=0;i<700;i++){ g.globalAlpha=0.05+Math.random()*0.12; g.fillStyle=shade(hsl.l+Math.random()*0.5);
+      g.beginPath(); g.arc(Math.random()*S, Math.random()*S, 2+Math.random()*9, 0, 7); g.fill(); }
+    g.globalAlpha=0.18; g.strokeStyle=shade(hsl.l-0.3); g.lineWidth=1;
+    for (let i=0;i<30;i++){ g.beginPath(); g.moveTo(Math.random()*S,Math.random()*S); g.lineTo(Math.random()*S,Math.random()*S); g.stroke(); }
+    g.globalAlpha=1;
+  } else {
+    for (let i=0;i<900;i++){ g.globalAlpha=0.06+Math.random()*0.14; g.fillStyle=shade(hsl.l+(Math.random()-0.5)*0.6);
+      g.beginPath(); g.arc(Math.random()*S, Math.random()*S, 2+Math.random()*12, 0, 7); g.fill(); }
+    for (let i=0;i<14;i++){ const cx=Math.random()*S, cy=Math.random()*S, cr=4+Math.random()*14;
+      g.globalAlpha=0.25; g.fillStyle=shade(hsl.l-0.35); g.beginPath(); g.arc(cx,cy,cr,0,7); g.fill();
+      g.globalAlpha=0.2;  g.fillStyle=shade(hsl.l+0.25); g.beginPath(); g.arc(cx-cr*0.2,cy-cr*0.2,cr*0.7,0,7); g.fill(); }
+    g.globalAlpha=1;
+  }
+  const tex=new THREE.CanvasTexture(cv); tex.wrapS=tex.wrapT=THREE.RepeatWrapping; return tex;
+}
+
+/* =========================================================================
+   LEVEL OBJECTS
+   ========================================================================= */
+let planets=[], targetPad, launcher, ball, band, previewLine, trailLine, trailPositions, trailCount=0;
+const targetPos=new THREE.Vector3(), anchorPos=new THREE.Vector3();
+const ballPos=new THREE.Vector3(), ballVel=new THREE.Vector3();
+let levelObjects=[];
+
+function clearLevel(){
+  for (const o of levelObjects){
+    worldGroup.remove(o);
+    o.traverse && o.traverse(n=>{ if(n.geometry)n.geometry.dispose(); if(n.material){ if(n.material.map)n.material.map.dispose(); n.material.dispose(); }});
+  }
+  levelObjects=[]; planets=[];
+}
+function addObj(o){ worldGroup.add(o); levelObjects.push(o); return o; }
+
+function buildLevel(idx){
+  clearLevel();
+  const L=LEVELS[idx];
+  anchorPos.set(L.anchor.x,0,L.anchor.z);
+  targetPos.set(L.target.x,0,L.target.z);
+
+  for (const pl of L.planets){
+    const mesh=new THREE.Mesh(
+      new THREE.SphereGeometry(pl.radius,36,24),
+      new THREE.MeshStandardMaterial({ map:makePlanetTexture(pl.type,pl.color), roughness:0.95, metalness:0.05 })
+    );
+    mesh.position.set(pl.x,0,pl.z); addObj(mesh);
+
+    const haloR=(pl.radius+Math.sqrt(pl.mass)*0.9)*1.2;
+    const halo=new THREE.Mesh(new THREE.SphereGeometry(haloR,24,16),
+      new THREE.MeshBasicMaterial({ color:pl.color, transparent:true, opacity:0.06, side:THREE.BackSide, blending:THREE.AdditiveBlending, depthWrite:false }));
+    halo.position.copy(mesh.position); addObj(halo);
+
+    planets.push({ mesh, posL:mesh.position.clone(), radius:pl.radius, mass:pl.mass, spin:(Math.random()*0.4+0.1)*(Math.random()<0.5?-1:1) });
+  }
+
+  targetPad=new THREE.Group();
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(CONFIG.CAPTURE_RADIUS,0.16,12,40), new THREE.MeshBasicMaterial({ color:0x66ffb0 }));
+  ring.rotation.x=Math.PI/2;
+  const disc=new THREE.Mesh(new THREE.CircleGeometry(CONFIG.CAPTURE_RADIUS*0.92,36), new THREE.MeshBasicMaterial({ color:0x0affa0, transparent:true, opacity:0.14, side:THREE.DoubleSide }));
+  disc.rotation.x=-Math.PI/2;
+  targetPad.add(ring); targetPad.add(disc); targetPad.position.copy(targetPos); addObj(targetPad);
+
+  launcher=new THREE.Group();
+  const baseRing=new THREE.Mesh(new THREE.TorusGeometry(0.9,0.12,10,28), new THREE.MeshBasicMaterial({ color:0x7fd0ff }));
+  baseRing.rotation.x=Math.PI/2; launcher.add(baseRing);
+  for (const s of [-1,1]){
+    const post=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.16,1.4,8), new THREE.MeshStandardMaterial({ color:0x2b3a55, roughness:0.6, metalness:0.3 }));
+    post.position.set(s*0.7,0.7,0); launcher.add(post);
+  }
+  launcher.position.copy(anchorPos); addObj(launcher);
+
+  ball=new THREE.Mesh(new THREE.SphereGeometry(CONFIG.BALL_RADIUS,24,18),
+    new THREE.MeshStandardMaterial({ color:0xfff0c0, emissive:0xffae3a, emissiveIntensity:0.7, roughness:0.3, metalness:0.5 }));
+  addObj(ball);
+
+  const bandGeo=new THREE.BufferGeometry(); bandGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6),3));
+  band=new THREE.Line(bandGeo, new THREE.LineBasicMaterial({ color:0x9fd8ff, transparent:true, opacity:0.8 })); addObj(band);
+
+  const pvGeo=new THREE.BufferGeometry(); pvGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(CONFIG.PREVIEW_STEPS_SHOW*3),3));
+  previewLine=new THREE.Line(pvGeo, new THREE.LineDashedMaterial({ color:0x7fffd0, dashSize:0.5, gapSize:0.35, transparent:true, opacity:0.9 })); addObj(previewLine);
+
+  trailPositions=new Float32Array(CONFIG.TRAIL_MAX*3);
+  const trGeo=new THREE.BufferGeometry(); trGeo.setAttribute('position', new THREE.BufferAttribute(trailPositions,3)); trGeo.setDrawRange(0,0);
+  trailLine=new THREE.Line(trGeo, new THREE.LineBasicMaterial({ color:0xffb347, transparent:true, opacity:0.85 })); addObj(trailLine); trailCount=0;
+
+  resetBall(); frameCamera(L); updateHUD();
+}
+
+/* =========================================================================
+   STATE
+   ========================================================================= */
+const STATE={ AIM:'aim', FLYING:'flying', WON:'won', FAIL:'fail' };
+let state=STATE.AIM, curLevel=0, attempts=0, flightTime=0, failTimer=0, padFlash=0;
+let started=false, gameMode=null;   // set by the title screen
+const best={}, solved={};
+let aiming=false, grabController=null;
+const pullPos=new THREE.Vector3();
+
+function resetBall(){
+  ballPos.copy(anchorPos); ballVel.set(0,0,0); pullPos.copy(anchorPos);
+  ball.position.copy(ballPos); ball.visible=true;
+  trailCount=0; trailLine.geometry.setDrawRange(0,0);
+  previewLine.visible=false; band.visible=false;
+  state=STATE.AIM;
+}
+
+/* =========================================================================
+   PHYSICS
+   ========================================================================= */
+const _tmp=new THREE.Vector3();
+function gravityAccel(p, out){
+  out.set(0,0,0);
+  for (const pl of planets){
+    _tmp.subVectors(pl.posL, p);
+    const r=_tmp.length(), rEff=Math.max(r, CONFIG.MIN_R), a=CONFIG.G*pl.mass/(rEff*rEff);
+    _tmp.multiplyScalar(a/(r||1)); out.add(_tmp);
+  }
+  return out;
+}
+
+function launch(){
+  _tmp.subVectors(anchorPos, pullPos); _tmp.y=0;
+  let stretch=_tmp.length();
+  if (stretch<0.4){ resetBall(); return; }
+  stretch=Math.min(stretch, CONFIG.MAX_STRETCH);
+  _tmp.normalize().multiplyScalar(stretch*CONFIG.POWER);
+  ballVel.copy(_tmp); ballPos.copy(anchorPos);
+  flightTime=0; trailCount=0; state=STATE.FLYING;
+  previewLine.visible=false; band.visible=false;
+  attempts++; updateHUD();
+}
+
+const _acc=new THREE.Vector3();
+function stepFlight(dt){
+  const h=dt/CONFIG.SUBSTEPS;
+  for (let s=0;s<CONFIG.SUBSTEPS;s++){
+    gravityAccel(ballPos,_acc);
+    ballVel.addScaledVector(_acc,h);
+    ballPos.addScaledVector(ballVel,h);
+    for (const pl of planets){ if (ballPos.distanceTo(pl.posL) < pl.radius+CONFIG.BALL_RADIUS) return fail(); }
+    if (ballPos.distanceTo(targetPos) < CONFIG.CAPTURE_RADIUS) return win();
+  }
+  ball.position.copy(ballPos);
+  if (trailCount<CONFIG.TRAIL_MAX){
+    trailPositions[trailCount*3]=ballPos.x; trailPositions[trailCount*3+1]=ballPos.y; trailPositions[trailCount*3+2]=ballPos.z;
+    trailCount++; trailLine.geometry.attributes.position.needsUpdate=true; trailLine.geometry.setDrawRange(0,trailCount);
+  }
+  flightTime+=dt;
+  if (ballPos.length()>CONFIG.BOUND_RADIUS || flightTime>CONFIG.MAX_FLIGHT_TIME) return fail();
+}
+
+function win(){
+  state=STATE.WON; ball.position.copy(targetPos); ballPos.copy(targetPos);
+  solved[curLevel]=true;
+  if (best[curLevel]===undefined || attempts<best[curLevel]) best[curLevel]=attempts;
+  padFlash=1.2; updateHUD(); showMessage(true);
+}
+function fail(){ state=STATE.FAIL; failTimer=0.9; ball.visible=false; }
+
+/* =========================================================================
+   TRAJECTORY PREVIEW (short)
+   ========================================================================= */
+function updatePreview(){
+  _tmp.subVectors(anchorPos, pullPos); _tmp.y=0;
+  let stretch=_tmp.length();
+  if (stretch<0.3){ previewLine.visible=false; band.visible=false; ball.position.copy(anchorPos); return; }
+  stretch=Math.min(stretch, CONFIG.MAX_STRETCH);
+  const vel=_tmp.clone().normalize().multiplyScalar(stretch*CONFIG.POWER);
+  const pos=anchorPos.clone(), acc=new THREE.Vector3(), pts=[], h=CONFIG.PREVIEW_DT;
+  const every=Math.ceil(CONFIG.PREVIEW_STEPS_SIM/CONFIG.PREVIEW_STEPS_SHOW);
+  for (let i=0;i<CONFIG.PREVIEW_STEPS_SIM && pts.length<CONFIG.PREVIEW_STEPS_SHOW;i++){
+    gravityAccel(pos,acc); vel.addScaledVector(acc,h); pos.addScaledVector(vel,h);
+    if (i%every===0) pts.push(pos.clone());
+    let hit=false; for (const pl of planets){ if (pos.distanceTo(pl.posL)<pl.radius){ hit=true; break; } }
+    if (hit) break;
+  }
+  const arr=previewLine.geometry.attributes.position.array;
+  for (let i=0;i<CONFIG.PREVIEW_STEPS_SHOW;i++){ const p=pts[Math.min(i,pts.length-1)]||anchorPos; arr[i*3]=p.x; arr[i*3+1]=p.y; arr[i*3+2]=p.z; }
+  previewLine.geometry.attributes.position.needsUpdate=true;
+  previewLine.geometry.setDrawRange(0, Math.max(2,pts.length));
+  previewLine.computeLineDistances(); previewLine.visible=true;
+
+  const bp=band.geometry.attributes.position.array;
+  bp[0]=anchorPos.x; bp[1]=anchorPos.y; bp[2]=anchorPos.z; bp[3]=pullPos.x; bp[4]=pullPos.y; bp[5]=pullPos.z;
+  band.geometry.attributes.position.needsUpdate=true; band.visible=true;
+  ball.position.copy(pullPos);
+}
+
+/* =========================================================================
+   DESKTOP / MOBILE INPUT (pointer events = mouse + touch)
+   ========================================================================= */
+const raycaster=new THREE.Raycaster(), ndc=new THREE.Vector2();
+const groundPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0), hitPoint=new THREE.Vector3();
+
+function pointerToPlane(ev){
+  const rect=renderer.domElement.getBoundingClientRect();
+  ndc.x=((ev.clientX-rect.left)/rect.width)*2-1;
+  ndc.y=-((ev.clientY-rect.top)/rect.height)*2+1;
+  raycaster.setFromCamera(ndc, camera);
+  return raycaster.ray.intersectPlane(groundPlane, hitPoint) ? hitPoint : null;
+}
+function setPull(p){
+  _tmp.set(p.x-anchorPos.x,0,p.z-anchorPos.z);
+  const d=_tmp.length(); if (d>CONFIG.MAX_STRETCH) _tmp.multiplyScalar(CONFIG.MAX_STRETCH/d);
+  pullPos.set(anchorPos.x+_tmp.x,0,anchorPos.z+_tmp.z); updatePreview();
+}
+function onPointerDown(ev){
+  if (!started || renderer.xr.isPresenting || state!==STATE.AIM) return;
+  const p=pointerToPlane(ev); if (!p) return;
+  aiming=true; setPull(p); ev.preventDefault();
+}
+function onPointerMove(ev){ if (aiming){ const p=pointerToPlane(ev); if (p) setPull(p); } }
+function onPointerUp(){ if (aiming){ aiming=false; launch(); } }
+
+renderer.domElement.addEventListener('pointerdown', onPointerDown);
+window.addEventListener('pointermove', onPointerMove);
+window.addEventListener('pointerup', onPointerUp);
+renderer.domElement.addEventListener('touchstart', e=>e.preventDefault(), {passive:false});
+
+/* =========================================================================
+   CAMERA FRAMING (desktop) — 3/4 tabletop view
+   ========================================================================= */
+function frameCamera(L){
+  if (renderer.xr.isPresenting) return;
+  // collect key points with an effective radius, then fit the bounding sphere
+  // to the CURRENT aspect ratio (handles portrait phones automatically).
+  const pts=[ {x:L.anchor.x,z:L.anchor.z,r:CONFIG.MAX_STRETCH},
+              {x:L.target.x,z:L.target.z,r:CONFIG.CAPTURE_RADIUS} ];
+  for (const pl of L.planets) pts.push({x:pl.x,z:pl.z,r:pl.radius+1});
+  let minX=1e9,maxX=-1e9,minZ=1e9,maxZ=-1e9;
+  for (const p of pts){ minX=Math.min(minX,p.x-p.r); maxX=Math.max(maxX,p.x+p.r);
+                        minZ=Math.min(minZ,p.z-p.r); maxZ=Math.max(maxZ,p.z+p.r); }
+  const cx=(minX+maxX)/2, cz=(minZ+maxZ)/2;
+  let R=0; for (const p of pts){ const d=Math.hypot(p.x-cx,p.z-cz)+p.r; if(d>R)R=d; }
+  R*=1.12; // breathing room
+
+  const vfov=camera.fov*Math.PI/180;
+  const hfov=2*Math.atan(Math.tan(vfov/2)*camera.aspect);
+  const dist=Math.max(R/Math.sin(vfov/2), R/Math.sin(hfov/2)); // fit both axes
+
+  const dir=new THREE.Vector3(0,0.78,0.62).normalize(); // 3/4 view angle
+  camera.position.set(cx+dir.x*dist, dir.y*dist, cz+dir.z*dist);
+  camera.lookAt(cx,0,cz);
+  playerDolly.position.set(0,0,0);
+}
+
+/* =========================================================================
+   VR — diorama + grab-the-orb slingshot
+   ========================================================================= */
+let vrController=[];
+const _wp=new THREE.Vector3();
+function makeControllerVisual(){
+  const g=new THREE.Group();
+  g.add(new THREE.Mesh(new THREE.SphereGeometry(0.012,12,8), new THREE.MeshBasicMaterial({ color:0x7fd0ff })));
+  const rg=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,-0.25)]);
+  g.add(new THREE.Line(rg, new THREE.LineBasicMaterial({ color:0x5a86b8, transparent:true, opacity:0.5 })));
+  return g;
+}
+function setupVRControllers(){
+  for (let i=0;i<2;i++){
+    const c=renderer.xr.getController(i);
+    c.add(makeControllerVisual());
+    c.addEventListener('selectstart', onVRSelectStart);
+    c.addEventListener('selectend', onVRSelectEnd);
+    playerDolly.add(c); vrController.push(c);
+  }
+}
+function controllerLocal(c, out){ c.getWorldPosition(_wp); worldGroup.worldToLocal(out.copy(_wp)); return out; }
+
+function onVRSelectStart(ev){
+  const c=ev.target;
+  if (state===STATE.WON){ nextLevel(); return; }
+  if (state!==STATE.AIM) return;
+  const lp=controllerLocal(c, new THREE.Vector3());
+  if (lp.distanceTo(anchorPos) < CONFIG.GRAB_RADIUS){ grabController=c; aiming=true; }
+}
+function onVRSelectEnd(ev){ if (grabController===ev.target && aiming){ aiming=false; grabController=null; launch(); } }
+function updateVRGrab(){
+  if (!grabController) return;
+  const lp=controllerLocal(grabController, _tmp.clone()); lp.y=0; setPull(lp);
+}
+
+function enterDioramaMode(){
+  worldGroup.scale.setScalar(CONFIG.VR_SCALE);
+  const L=LEVELS[curLevel], cx=(L.anchor.x+L.target.x)/2, cz=(L.anchor.z+L.target.z)/2;
+  worldGroup.position.set(-cx*CONFIG.VR_SCALE, CONFIG.VR_TABLE_Y, -cz*CONFIG.VR_SCALE - CONFIG.VR_FORWARD);
+  worldGroup.rotation.set(0,0,0);
+}
+function exitDioramaMode(){ worldGroup.scale.setScalar(1); worldGroup.position.set(0,0,0); frameCamera(LEVELS[curLevel]); }
+
+renderer.xr.addEventListener('sessionstart', ()=>{ enterDioramaMode(); hideMessageDOM(); vrPanel.visible=true; updateVRPanel(); });
+renderer.xr.addEventListener('sessionend', ()=>{ exitDioramaMode(); vrPanel.visible=false; if (state===STATE.WON) showMessage(true); });
+
+/* world-space VR panel (DOM is invisible in headset) */
+let vrPanel, vrPanelTex, vrPanelCtx;
+(function buildVRPanel(){
+  const cv=document.createElement('canvas'); cv.width=512; cv.height=256;
+  vrPanelCtx=cv.getContext('2d'); vrPanelTex=new THREE.CanvasTexture(cv);
+  vrPanel=new THREE.Mesh(new THREE.PlaneGeometry(0.42,0.21), new THREE.MeshBasicMaterial({ map:vrPanelTex, transparent:true }));
+  vrPanel.position.set(0,-0.28,-0.7); vrPanel.visible=false; camera.add(vrPanel);
+})();
+function roundRect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
+function updateVRPanel(){
+  const g=vrPanelCtx; g.clearRect(0,0,512,256);
+  g.fillStyle='rgba(8,12,26,0.78)'; roundRect(g,0,0,512,256,24); g.fill(); g.textAlign='center';
+  if (state===STATE.WON){
+    g.fillStyle='#7fffb0'; g.font='bold 46px sans-serif'; g.fillText('Solved!',256,96);
+    g.fillStyle='#cfe0ff'; g.font='26px sans-serif'; g.fillText('Attempts: '+attempts+'   Par: '+LEVELS[curLevel].par,256,146);
+    g.fillStyle='#9fd8ff'; g.font='22px sans-serif'; g.fillText('Pull trigger for next level',256,196);
+  } else {
+    g.fillStyle='#7fd0ff'; g.font='bold 34px sans-serif'; g.fillText('Level '+(curLevel+1)+' — '+LEVELS[curLevel].name,256,70);
+    g.fillStyle='#eaf2ff'; g.font='26px sans-serif'; g.fillText('Attempts: '+attempts+'    Best: '+(best[curLevel]!==undefined?best[curLevel]:'—'),256,122);
+    g.fillStyle='#9fb6d8'; g.font='20px sans-serif'; g.fillText('Grab the orb • pull back • release',256,176);
+  }
+  vrPanelTex.needsUpdate=true;
+}
+
+/* =========================================================================
+   UI / DOM
+   ========================================================================= */
+const el=id=>document.getElementById(id);
+function updateHUD(){
+  el('hudLevel').textContent='Level '+(curLevel+1)+' — '+LEVELS[curLevel].name;
+  const b=best[curLevel]!==undefined?best[curLevel]:'—';
+  el('hudStats').innerHTML='Attempts: '+attempts+' &nbsp;•&nbsp; Best: '+b+' &nbsp;•&nbsp; Par: '+LEVELS[curLevel].par;
+  buildLevelChips();
+}
+function buildLevelChips(){
+  const wrap=el('levelsel'); wrap.innerHTML='';
+  const label=document.createElement('div'); label.className='lslabel'; label.textContent='Level';
+  const chips=document.createElement('div'); chips.className='lschips';
+  LEVELS.forEach((L,i)=>{
+    const c=document.createElement('div');
+    c.className='lchip'+(i===curLevel?' active':'')+(solved[i]?' done':'');
+    c.textContent=(i+1); c.title=L.name; c.onclick=()=>gotoLevel(i); chips.appendChild(c);
+  });
+  wrap.appendChild(label); wrap.appendChild(chips);
+}
+function showMessage(won){
+  if (renderer.xr.isPresenting){ updateVRPanel(); return; }
+  el('msgTitle').textContent=won?'Solved!':'';
+  el('msgText').textContent=won?('Solved in '+attempts+' attempt'+(attempts===1?'':'s')+'.  Par '+LEVELS[curLevel].par+'.  Best '+best[curLevel]+'.'):'';
+  const showNext=curLevel<LEVELS.length-1;
+  el('nextBtn').style.display=showNext?'':'none';
+  el('msg').style.display='flex';
+}
+function hideMessageDOM(){ el('msg').style.display='none'; }
+
+el('retryBtn').onclick=()=>{ hideMessageDOM(); attempts=0; resetBall(); updateHUD(); };
+el('nextBtn').onclick=()=>{ hideMessageDOM(); nextLevel(); };
+el('resetBtn').onclick=()=>{ resetBall(); updateHUD(); };
+
+function gotoLevel(i){
+  curLevel=i; attempts=0; hideMessageDOM(); buildLevel(i);
+  if (renderer.xr.isPresenting){ enterDioramaMode(); updateVRPanel(); }
+}
+function nextLevel(){ gotoLevel((curLevel+1)%LEVELS.length); }
+
+/* =========================================================================
+   TITLE SCREEN  /  MODE SELECT  +  VR ENTRY
+   ========================================================================= */
+async function enterVR(){
+  if (!navigator.xr) return false;
+  if (renderer.xr.isPresenting){ renderer.xr.getSession().end(); return true; }
+  try{
+    const session=await navigator.xr.requestSession('immersive-vr',
+      { optionalFeatures:['local-floor','bounded-floor','hand-tracking'] });
+    await renderer.xr.setSession(session);
+    return true;
+  }catch(e){ console.warn('VR start failed', e); return false; }
+}
+
+function startGame(mode){
+  gameMode=mode; started=true;
+  document.body.classList.add('started');
+  el('start').style.display='none';
+  el('tip').textContent =
+    mode==='mobile' ? 'Drag back from the orb with your finger and release.' :
+    mode==='vr'     ? 'Grab the orb, pull it back, and release.' :
+                      'Drag back from the orb with your mouse and release.';
+  frameCamera(LEVELS[curLevel]);
+}
+
+(function setupTitleScreen(){
+  el('modeDesktop').onclick = ()=> startGame('desktop');
+  el('modeMobile').onclick  = ()=> startGame('mobile');
+  el('modeVR').onclick      = async ()=>{ if (await enterVR()) startGame('vr'); };
+
+  // in-game "Enter VR" button (bottom-right, shown once playing)
+  const btn=el('vrbtn');
+  btn.onclick = async ()=>{ await enterVR(); };
+
+  // detect headset support and gate the VR option accordingly
+  function disableVR(){
+    el('modeVR').classList.add('disabled');
+    el('modeVR').onclick=null;
+    el('vrnote').textContent='No headset detected';
+    btn.style.display='none';
+  }
+  if (navigator.xr && navigator.xr.isSessionSupported){
+    navigator.xr.isSessionSupported('immersive-vr')
+      .then(ok=>{ if (ok){ btn.style.display='inline-block'; } else disableVR(); })
+      .catch(disableVR);
+  } else { disableVR(); }
+})();
+
+/* =========================================================================
+   RESIZE + LOOP
+   ========================================================================= */
+window.addEventListener('resize', ()=>{
+  camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  frameCamera(LEVELS[curLevel]);
+});
+
+const clock=new THREE.Clock();
+function animate(){
+  let dt=clock.getDelta(); if (dt>0.05) dt=0.05;
+  for (const pl of planets) pl.mesh.rotation.y += pl.spin*dt;
+  if (targetPad){
+    const s=1+Math.sin(performance.now()*0.003)*0.04+padFlash*0.5;
+    targetPad.scale.setScalar(s);
+    if (padFlash>0) padFlash=Math.max(0,padFlash-dt*1.5);
+  }
+  if (renderer.xr.isPresenting) updateVRGrab();
+  if (state===STATE.FLYING){ stepFlight(dt); }
+  else if (state===STATE.FAIL){ failTimer-=dt; if (failTimer<=0){ resetBall(); if (renderer.xr.isPresenting) updateVRPanel(); } }
+  else if (state===STATE.AIM && aiming){ updatePreview(); }
+  if (renderer.xr.isPresenting && state===STATE.WON) updateVRPanel();
+  renderer.render(scene, camera);
+}
+
+/* boot */
+setupVRControllers();
+buildLevel(0);
+renderer.setAnimationLoop(animate);
+
+})();
+</script>
+</body>
+</html>
