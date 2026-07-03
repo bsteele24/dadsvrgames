@@ -1,0 +1,1637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Crew Dragon — Pad Launch Sim</title>
+<style>
+  :root{ --ice:#e8eef5; --blue:#3da9fc; --dim:#7c8aa0; --warn:#ff5b4a; --go:#39d98a; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; background:#05070c; overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ice); -webkit-user-select:none; user-select:none; touch-action:none; }
+  canvas{ display:block; }
+  #title{ position:fixed; inset:0; z-index:30; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:26px; text-align:center;
+    background:radial-gradient(120% 90% at 50% 18%, #0c1626 0%, #05070c 70%); padding:24px; }
+  #title h1{ font-weight:700; font-size:clamp(30px,7vw,58px); letter-spacing:.16em;
+    text-transform:uppercase; }
+  #title h1 small{ display:block; font-size:.34em; letter-spacing:.42em; color:var(--blue);
+    margin-top:14px; font-weight:500; }
+  #title p.sub{ color:var(--dim); max-width:440px; font-size:15px; line-height:1.55; }
+  .modes{ display:flex; flex-wrap:wrap; gap:14px; justify-content:center; }
+  .mode{ min-width:150px; padding:16px 22px; border:1px solid #21344e; border-radius:14px;
+    background:linear-gradient(#0e1a2c,#0a1320); color:var(--ice); font-size:16px; font-weight:600;
+    letter-spacing:.06em; cursor:pointer; transition:.15s; }
+  .mode:hover{ border-color:var(--blue); transform:translateY(-2px); box-shadow:0 8px 30px #0008; }
+  .mode small{ display:block; font-weight:400; font-size:11px; color:var(--dim); margin-top:5px;
+    letter-spacing:.04em; }
+  .mode[disabled]{ opacity:.4; cursor:not-allowed; transform:none; box-shadow:none; }
+  #hud{ position:fixed; left:0; right:0; bottom:0; z-index:20; pointer-events:none;
+    padding:14px 16px; display:none; }
+  #hud .bar{ max-width:760px; margin:0 auto; background:#08101bcc; border:1px solid #1d2c44;
+    border-radius:12px; padding:12px 16px; backdrop-filter:blur(6px); }
+  #hud .step{ font-size:13px; letter-spacing:.14em; color:var(--blue); text-transform:uppercase; }
+  #hud .desc{ font-size:15px; margin-top:4px; color:var(--ice); }
+  #hud .tele{ display:flex; gap:18px; margin-top:8px; flex-wrap:wrap; font-size:12px;
+    color:var(--dim); font-variant-numeric:tabular-nums; }
+  #hud .tele b{ color:var(--ice); font-weight:600; }
+  #crosshair{ position:fixed; left:50%; top:50%; width:18px; height:18px; margin:-9px 0 0 -9px;
+    z-index:18; display:none; pointer-events:none; }
+  #crosshair:before,#crosshair:after{ content:""; position:absolute; background:#ffffffcc; }
+  #crosshair:before{ left:8px; top:0; width:2px; height:18px; }
+  #crosshair:after{ top:8px; left:0; height:2px; width:18px; }
+  #hint{ position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:19;
+    font-size:12px; color:#9fb0c8; background:#08101bcc; border:1px solid #1d2c44;
+    padding:7px 14px; border-radius:20px; display:none; letter-spacing:.04em; }
+  #exit{ position:fixed; top:12px; right:12px; z-index:21; display:none; pointer-events:auto;
+    background:#10203400; border:1px solid #2a3e5c; color:#9fb0c8; border-radius:9px;
+    padding:7px 12px; font-size:12px; cursor:pointer; }
+  #vrbtn{ position:fixed; bottom:18px; right:18px; z-index:21; }
+  #warp{ position:fixed; top:12px; left:12px; z-index:21; display:none; pointer-events:auto;
+    background:#0b1b2e; border:1px solid var(--blue); color:var(--blue); border-radius:9px;
+    padding:7px 13px; font-size:12px; letter-spacing:.12em; cursor:pointer; font-weight:600;
+    text-transform:uppercase; transition:background .15s, box-shadow .15s, color .15s; }
+  #warp.on{ background:var(--blue); color:#04121f; box-shadow:0 0 14px #3da9fc99; }
+</style>
+</head>
+<body>
+<div id="title">
+  <h1>Crew Dragon<small>Pad Launch Simulator</small></h1>
+  <p class="sub">Step into the commander's seat. Run the pre-launch crew checklist on the three flight
+    displays, go for launch, and ride it uphill — or pull the SuperDraco abort if things go wrong.</p>
+  <div class="modes">
+    <div class="mode" data-mode="desktop">Desktop<small>Mouse &amp; keyboard</small></div>
+    <div class="mode" data-mode="mobile">Mobile<small>Touch &amp; tilt</small></div>
+    <div class="mode" id="vrmode" data-mode="vr">VR Headset<small>Checking…</small></div>
+  </div>
+</div>
+
+<div id="hint"></div>
+<div id="crosshair"></div>
+<button id="exit">Exit ▸</button>
+<button id="warp">Warp ×10</button>
+<div id="hud"><div class="bar">
+  <div class="step" id="hstep">STANDBY</div>
+  <div class="desc" id="hdesc">Select an interactive control to begin.</div>
+  <div class="tele" id="htele"></div>
+</div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/webxr/VRButton.js"></script>
+<script>
+/* ============================================================================
+   CREW DRAGON — PAD LAUNCH SIM   (Three.js r128 / WebXR)
+   All tunable values live in CFG.
+============================================================================ */
+const CFG = {
+  // --- Cabin geometry (metres, roughly Dragon-scale: ~4m internal dia) ---
+  cabinRadius: 2.0,
+  cabinHeight: 3.0,
+  seatRow: 4,                 // crew seats across
+  seatSpacing: 0.74,
+  seatRecline: 0.40,          // radians the seatback/player tilt back
+  // --- Console / displays ---
+  screenCount: 3,
+  screenW: 0.62, screenH: 0.40, screenGap: 0.045,
+  screenDist: 0.90,           // distance from eye to centre screen
+  screenTilt: -0.22,          // (panel/console geometry tilt)
+  screenFace: 0.26,           // screens tilt DOWN toward the seated eye so text reads square-on
+  consoleDrop: 0.30,          // control panel below screens
+  // --- Player eye in commander seat (rig local) ---
+  eye: { x:0, y:1.18, z:0.0 },
+  seatIndex: 1,               // which seat the player occupies (0..3)
+  // --- Flight profile (seconds from liftoff) ---
+  autoSeqHold: 45,            // T-minus when auto sequence starts
+  ignition: 3.0,             // engine start before T0
+  tMaxQ: 60, tMECO: 150, tSep: 153, tOrbit: 540,
+  // accel feel
+  liftAccel: 1.35,            // visual climb factor
+  orbitVel: 7660,            // orbital velocity target (m/s) reached at SECO
+  orbitAlt: 210000,          // orbital altitude target (m) reached at SECO
+  // --- Abort ---
+  abortAccel: 9.0,            // SuperDraco escape peak (g)  — pad/low abort arc
+  abortBurn: 1.3,            // escape burn duration (s); gravity takes over after
+  // --- High/orbital abort: deorbit + reentry descent ---
+  highAbortAlt: 40000,       // above this, abort = deorbit & reentry (not the pad arc)
+  deorbitKick: 180,          // initial downward velocity on a high abort (m/s)
+  reentryScaleH: 11000,      // atmospheric scale height for drag (m)
+  reentryDragK: 0.0008,      // drag coefficient (→ ~110 m/s terminal near ground)
+  drogueAlt: 5500,           // drogues deploy at this altitude on descent (m) — never in space
+  mainAlt: 2000,             // mains deploy here (m)
+  reentryHeatOn: 1500,       // dynamic-pressure heat where plasma glow begins
+  reentryHeatRange: 78000,   // heat span to full plasma brightness
+  // --- Audio ---
+  master: 0.6,
+};
+
+/* ---------- globals ---------- */
+let renderer, scene, camera, rig, clock;
+let WARP = 1;                        // sim time multiplier (Warp ×10 button)
+let deck;                            // reclined flight-deck group (seats, crew, player, console)
+let mode = null, running = false;
+let interactives = [];               // {mesh, id, onSelect, enabled}
+let screens = {};                    // canvas display contexts
+let hud = { step:document.getElementById('hstep'), desc:document.getElementById('hdesc'),
+            tele:document.getElementById('htele') };
+let raycaster = new THREE.Raycaster();
+let controllers = [], controllerRays = [];
+let look = { yaw:0, pitch:0, dragging:false, lx:0, ly:0 };
+let tele = { t:-Infinity, alt:0, vel:0, accel:0, q:0, cabin:14.7, fuel:100, phase:'PRELAUNCH', maxAlt:0, highAbort:false, reentry:false, heat:0 };
+let exterior = {};                   // pad, sky, vehicle bits
+let SEATX = 0;                       // commander seat x (rig base)
+let audio = null;
+let highlighted = null;
+let centerMode = 'nav';              // centre screen source: 'nav' | 'cam' | 'dock'
+const DOCK_START = { x:1.6, y:-1.2, z:120, vx:0, vy:0, vz:-0.8, roll:5 };
+const DOCK_NOSE_Y = 3.15;    // docking-interface height, just above the nose cap (cap is at y2.8)
+const DOCK_PORT_OFF = 0.38;  // port centre sits this far past its docking face, so the body extends UP, never into the cabin
+let dock = { on:false, mode:'auto', docked:false, failed:false, t:0,
+             x:1.6, y:-1.2, z:120, vx:0, vy:0, vz:-0.8, roll:5,
+             port:null, cam:null, overlay:null, octx:null, otex:null,
+             swCtx:null, swTex:null, ctlMode:null, rcsBtns:[] };
+
+/* ===========================================================================
+   CHECKLIST STATE MACHINE  — full multi-step crew flow
+=========================================================================== */
+const CHECK = [
+  { id:'power',  step:'STEP 1 · POWER',        desc:'Press POWER on the centre display to bring the flight computers online.' },
+  { id:'eclss',  step:'STEP 2 · ECLSS',        desc:'Start the cabin life-support loop — press ECLSS to pressurise the cabin.' },
+  { id:'hatch',  step:'STEP 3 · HATCH',        desc:'Seal the side hatch. Press HATCH SEAL and wait for the green latch.' },
+  { id:'arm',    step:'STEP 4 · LAUNCH ESCAPE',desc:'Flip the green guard and ARM the SuperDraco launch-escape system.' },
+  { id:'poll',   step:'STEP 5 · GO POLL',      desc:'All stations report. Press GO FOR LAUNCH to accept the auto-sequence.' },
+  { id:'launch', step:'STEP 6 · AUTO SEQUENCE',desc:'Press START SEQUENCE. Computers take T-45 seconds to liftoff.' },
+];
+let checkIdx = 0;
+const sysState = { power:false, eclss:false, hatch:false, arm:false, poll:false, launched:false, aborted:false, drogues:false, mains:false };
+let hatchAnim = { state:'open', t:0, open:1.35 };   // open | closing | sealing | sealed
+
+function currentCheck(){ return CHECK[checkIdx]; }
+function advance(id){
+  if (checkIdx < CHECK.length && CHECK[checkIdx].id === id){
+    checkIdx++;
+    beep(880,0.06);
+    if (checkIdx < CHECK.length) setHud(CHECK[checkIdx]);
+    refreshButtonStates();
+  }
+}
+function setHud(c){ if(c){ hud.step.textContent=c.step; hud.desc.textContent=c.desc; } }
+
+/* ===========================================================================
+   BOOT / MODE SELECT
+=========================================================================== */
+(function initTitle(){
+  document.querySelectorAll('.mode').forEach(el=>{
+    el.addEventListener('click',()=>{ if(el.hasAttribute('disabled')) return; start(el.dataset.mode); });
+  });
+  // VR availability
+  const vrEl = document.getElementById('vrmode');
+  if (navigator.xr && navigator.xr.isSessionSupported){
+    navigator.xr.isSessionSupported('immersive-vr').then(ok=>{
+      vrEl.querySelector('small').textContent = ok ? 'Meta Quest ready' : 'No headset found';
+      if(!ok) vrEl.setAttribute('disabled','');
+    }).catch(()=>{ vrEl.querySelector('small').textContent='Unavailable'; vrEl.setAttribute('disabled',''); });
+  } else { vrEl.querySelector('small').textContent='Not supported'; vrEl.setAttribute('disabled',''); }
+})();
+
+function start(m){
+  mode = m;
+  document.getElementById('title').style.display='none';
+  document.getElementById('hud').style.display='block';
+  document.getElementById('exit').style.display='block';
+  const warpBtn=document.getElementById('warp');
+  warpBtn.style.display='block';
+  warpBtn.onclick=()=>{
+    WARP = (WARP===1) ? 10 : 1;
+    warpBtn.classList.toggle('on', WARP!==1);
+    warpBtn.textContent = (WARP===1) ? 'Warp ×10' : 'Warp ×10 · ON';
+  };
+  buildWorld();
+  setupMode(m);
+  setHud(CHECK[0]);
+  refreshButtonStates();
+  running = true;
+  clock = new THREE.Clock();
+  renderer.setAnimationLoop(loop);
+}
+
+/* ===========================================================================
+   WORLD BUILD
+=========================================================================== */
+function buildWorld(){
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x05070c);
+  scene.fog = new THREE.Fog(0x0a1422, 6, 22);
+
+  renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.xr.enabled = true;
+  document.body.appendChild(renderer.domElement);
+
+  camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.05, 2000);
+
+  // Rig: holds the camera; positions player in the commander seat & handles recline.
+  rig = new THREE.Group();
+  const seatX = (CFG.seatIndex - (CFG.seatRow-1)/2) * CFG.seatSpacing;
+  SEATX = seatX;
+  rig.position.set(seatX, 0, 0);
+  rig.rotation.x = 0;
+  rig.add(camera);
+  camera.position.set(0, CFG.eye.y, CFG.eye.z);
+
+  // Flight deck: seats, crew, player and console recline together so the crew face UP the stack
+  // (as on the pad atop Falcon 9). The hull/windows/hatch stay fixed (nose up).
+  const RECLINE = 78 * Math.PI/180;
+  deck = new THREE.Group();
+  deck.rotation.x = RECLINE;
+  // keep the commander's eye near (SEATX, 1.2, 0) after tilting about the origin
+  deck.position.set(0, 1.2 - CFG.eye.y*Math.cos(RECLINE), -CFG.eye.y*Math.sin(RECLINE));
+  scene.add(deck);
+  deck.add(rig);
+
+  buildLighting();
+  buildCabin();
+  buildSeats();
+  buildConsole();
+  buildExterior();
+  buildChutes();
+  buildBoardingArm();
+  buildReentryFX();
+  buildStack();
+  // External camera fleet. Index 0 = nose cam (also used for chutes/plasma), then mounted rocket cams.
+  exterior.topRT = new THREE.WebGLRenderTarget(512, 330);
+  exterior.topCam = new THREE.PerspectiveCamera(70, 512/330, 0.1, 4000);
+  exterior.topCam.position.set(0, 3.0, 0);
+  exterior.topCam.up.set(0,0,-1);
+  exterior.topCam.lookAt(0, 9, 0);
+  scene.add(exterior.topCam);
+  exterior.camIndex = 0;
+  exterior.cams = [{id:'nose', name:'NOSECONE', cam:exterior.topCam}];
+  addCam('interstage','BOOSTER INTERSTAGE', new THREE.Vector3(1.9,14.5,0),  new THREE.Vector3(0,-2,0),  new THREE.Vector3(0,0,-1), exterior.booster);
+  addCam('s1down',    'STAGE 1 DOWNWARD',   new THREE.Vector3(1.9,13.0,0),  new THREE.Vector3(0,-46,0), new THREE.Vector3(0,0,-1), exterior.booster);
+  addCam('staging',   'STAGING SEP',        new THREE.Vector3(1.9,-12.6,0), new THREE.Vector3(0,-24,0), new THREE.Vector3(0,0,-1), exterior.stack);
+  addCam('trunk',     'DRAGON TRUNK',       new THREE.Vector3(1.9,-0.8,0),  new THREE.Vector3(0,-26,0), new THREE.Vector3(0,0,-1), exterior.stack);
+  buildDockTarget();
+}
+
+function buildLighting(){
+  scene.add(new THREE.HemisphereLight(0xdfe9f5, 0x141a24, 0.55));
+  const key = new THREE.DirectionalLight(0xffffff, 0.5); key.position.set(2,4,3); scene.add(key);
+  // cool LED cove strips
+  const cove = new THREE.PointLight(0x9fd0ff, 0.9, 8); cove.position.set(0,2.4,-0.4); scene.add(cove);
+  const cove2 = new THREE.PointLight(0xbfe0ff, 0.6, 7); cove2.position.set(0,1.0,1.6); scene.add(cove2);
+  exterior.cabinLight = cove2;
+}
+
+function buildCabin(){
+  const R = CFG.cabinRadius, H = CFG.cabinHeight;
+  const white = new THREE.MeshStandardMaterial({ color:0xf2f4f7, roughness:0.55, metalness:0.05, side:THREE.BackSide });
+  // Gumdrop shell: cone-ish wall using a lathe of the Dragon profile
+  const pts=[];
+  for(let i=0;i<=16;i++){ const t=i/16; const y=t*H; const r=R*(1.0-0.55*t*t); pts.push(new THREE.Vector2(Math.max(r,0.25),y)); }
+  const shell = new THREE.Mesh(new THREE.LatheGeometry(pts, 48), white);
+  shell.position.y=-0.2; shell.renderOrder=2; scene.add(shell);
+  // hull interior radius at a given world height (mirrors the lathe profile)
+  const hullRadiusAt=(y)=>{ const t=(y+0.2)/H; return Math.max(R*(1-0.55*t*t),0.25); };
+  // floor ring
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(R*0.96,48),
+    new THREE.MeshStandardMaterial({ color:0xdfe4ea, roughness:0.7 }));
+  floor.rotation.x=-Math.PI/2; floor.position.y=-0.2; scene.add(floor);
+  // LED cove ring (emissive torus near top)
+  const cove = new THREE.Mesh(new THREE.TorusGeometry(R*0.7,0.025,8,48),
+    new THREE.MeshBasicMaterial({ color:0xbfe6ff }));
+  cove.rotation.x=Math.PI/2; cove.position.y=2.35; scene.add(cove);
+
+  // Curved OVAL side windows (4) — true cut-outs that follow the hull so they never clip to a half-oval.
+  // Each window is a small patch curved onto the hull: a depth-mask punches it, a glass pane + bezel sit in it.
+  const makeHullPatch=(a, wy, rx, ry, offset, ringInner)=>{
+    const segs=56, P=[], idx=[];
+    const map=(ex,ey)=>{ const y=wy+ey*ry; const hr=hullRadiusAt(y)-offset;
+      const ang=a + (ex*rx)/Math.max(0.3,hullRadiusAt(y));
+      return [Math.sin(ang)*hr, y, Math.cos(ang)*hr]; };
+    if(ringInner==null){
+      P.push(...map(0,0));
+      for(let i=0;i<=segs;i++){ const th=i/segs*Math.PI*2; P.push(...map(Math.cos(th),Math.sin(th))); }
+      for(let i=1;i<=segs;i++) idx.push(0,i,i+1);
+    } else {
+      for(let i=0;i<=segs;i++){ const th=i/segs*Math.PI*2, cx=Math.cos(th), cy=Math.sin(th);
+        P.push(...map(cx*ringInner, cy*ringInner)); P.push(...map(cx, cy)); }
+      for(let i=0;i<segs;i++){ const o=i*2; idx.push(o,o+1,o+2, o+1,o+3,o+2); }
+    }
+    const g=new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(P,3));
+    g.setIndex(idx); g.computeVertexNormals(); return g;
+  };
+  const winRx=0.42, winRy=0.30, winY=1.32;
+  const sideGlassMat=new THREE.MeshStandardMaterial({ color:0x9ec7e6, transparent:true, opacity:0.14,
+    roughness:0.04, metalness:0.0, side:THREE.DoubleSide, depthWrite:false });
+  const maskMat=new THREE.MeshBasicMaterial({ colorWrite:false, depthWrite:true, depthTest:true, side:THREE.DoubleSide });
+  const bezMat=new THREE.MeshStandardMaterial({ color:0xced3da, roughness:0.4, metalness:0.35, side:THREE.DoubleSide });
+  for(let i=0;i<4;i++){
+    const a = i*Math.PI/2 + Math.PI/4;
+    const mask=new THREE.Mesh(makeHullPatch(a,winY,winRx,winRy,0.03,null), maskMat); mask.renderOrder=1; scene.add(mask);
+    const glass=new THREE.Mesh(makeHullPatch(a,winY,winRx*0.98,winRy*0.98,0.06,null), sideGlassMat); glass.renderOrder=3; scene.add(glass);
+    const bez=new THREE.Mesh(makeHullPatch(a,winY,winRx*1.12,winRy*1.12,0.045,0.86), bezMat); scene.add(bez);
+    exterior['win'+i]=glass;
+  }
+  // Recessed articulated side hatch, set in a coaming well so the WHOLE hatch clears the curved hull
+  {
+    const hy=1.7, ha=Math.PI;                                     // -Z wall
+    const dir=new THREE.Vector3(Math.sin(ha),0,Math.cos(ha));
+    const hIn=hullRadiusAt(hy+0.46)-0.05;                         // pull hatch inboard so its full circle is proud of the hull
+    // punch the hull open at the hatch so the doorway looks OUTSIDE to the boarding arm
+    const hmask=new THREE.Mesh(makeHullPatch(ha,hy,0.46,0.46,0.03,null),
+      new THREE.MeshBasicMaterial({colorWrite:false,depthWrite:true,depthTest:true,side:THREE.DoubleSide}));
+    hmask.renderOrder=1; scene.add(hmask);
+    // short coaming lining the recess out to the hull opening
+    const coam=new THREE.Mesh(new THREE.CylinderGeometry(0.48,0.48,0.34,36,1,true),
+      new THREE.MeshStandardMaterial({color:0xd4dae1,roughness:0.6,metalness:0.15,side:THREE.DoubleSide}));
+    coam.rotation.x=Math.PI/2; coam.position.copy(dir).multiplyScalar(hIn+0.15); coam.position.y=hy; scene.add(coam);
+    // frame rim
+    const frame=new THREE.Mesh(new THREE.TorusGeometry(0.47,0.05,10,44),
+      new THREE.MeshStandardMaterial({color:0xb9c0c8,roughness:0.4,metalness:0.4}));
+    frame.position.copy(dir).multiplyScalar(hIn); frame.position.y=hy; frame.lookAt(0,hy,0); scene.add(frame);
+    // hinge pivot (offset to the door's left edge); door swings inward
+    const pivot=new THREE.Group();
+    pivot.position.copy(dir).multiplyScalar(hIn-0.02); pivot.position.y=hy; pivot.lookAt(0,hy,0); scene.add(pivot);
+    const hinge=new THREE.Group(); hinge.position.x=-0.42; pivot.add(hinge); exterior.hatchHinge=hinge;
+    const door=new THREE.Mesh(new THREE.RingGeometry(0.14,0.42,48),
+      new THREE.MeshStandardMaterial({color:0xeef1f4,roughness:0.5,metalness:0.15,side:THREE.DoubleSide}));
+    door.position.set(0.42,0,0); hinge.add(door);
+    // see-through porthole in the door
+    const win=new THREE.Mesh(new THREE.CircleGeometry(0.14,32),
+      new THREE.MeshStandardMaterial({color:0x9ec7e6,transparent:true,opacity:0.16,roughness:0.05,metalness:0.0,side:THREE.DoubleSide,depthWrite:false}));
+    win.position.set(0.42,0,0.011); win.renderOrder=3; hinge.add(win);
+    const winBez=new THREE.Mesh(new THREE.TorusGeometry(0.15,0.02,8,28),
+      new THREE.MeshStandardMaterial({color:0xb9c0c8,roughness:0.4,metalness:0.4}));
+    winBez.position.set(0.42,0,0.008); hinge.add(winBez);
+    const latch=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.05,0.04),
+      new THREE.MeshStandardMaterial({color:0x9aa2ab,roughness:0.4,metalness:0.5}));
+    latch.position.set(0.42,-0.22,0.03); hinge.add(latch); exterior.hatchLatch=latch;
+    const light=new THREE.Mesh(new THREE.CircleGeometry(0.04,16),
+      new THREE.MeshBasicMaterial({color:0xff5b4a}));
+    light.position.set(0.70,0.0,0.03); hinge.add(light); exterior.hatchLight=light;
+    hinge.rotation.y = hatchAnim.open;                            // start open (swung inward)
+  }
+
+  // Top of cabin capped — no overhead window. The upward view comes from the CAM feed on the centre screen.
+  const cap=new THREE.Mesh(new THREE.CircleGeometry(0.95,48),
+    new THREE.MeshStandardMaterial({color:0xeef1f4, roughness:0.6, side:THREE.DoubleSide}));
+  cap.rotation.x=Math.PI/2; cap.position.set(0,2.8,0); scene.add(cap);
+}
+
+function buildSeats(){
+  const shellMat=new THREE.MeshStandardMaterial({color:0xf4f6f8,roughness:0.5,metalness:0.05});
+  const cushMat =new THREE.MeshStandardMaterial({color:0x2b2f36,roughness:0.85});
+  for(let i=0;i<CFG.seatRow;i++){
+    const x=(i-(CFG.seatRow-1)/2)*CFG.seatSpacing;
+    const g=new THREE.Group(); g.position.set(x,0.0,0.15); g.rotation.y=Math.PI;
+    // seat pan
+    const pan=new THREE.Mesh(new THREE.BoxGeometry(0.56,0.12,0.5),shellMat); pan.position.y=0.55; g.add(pan);
+    const panC=new THREE.Mesh(new THREE.BoxGeometry(0.46,0.08,0.42),cushMat); panC.position.y=0.62; g.add(panC);
+    // seat back
+    const back=new THREE.Mesh(new THREE.BoxGeometry(0.56,0.9,0.12),shellMat);
+    back.position.set(0,1.0,-0.22); g.add(back);
+    const backC=new THREE.Mesh(new THREE.BoxGeometry(0.44,0.78,0.08),cushMat);
+    backC.position.set(0,1.0,-0.16); g.add(backC);
+    // headrest
+    const head=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.26,0.16),shellMat);
+    head.position.set(0,1.55,-0.18); g.add(head);
+    // 5-point harness straps
+    const strap=new THREE.MeshStandardMaterial({color:0x111418,roughness:0.9});
+    [[-0.16],[0.16]].forEach(s=>{
+      const st=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.7,0.02),strap);
+      st.position.set(s[0],1.0,-0.1); st.rotation.x=0.18; g.add(st);
+    });
+    // occupy adjacent seats with simple suited crew (not the player's seat)
+    if(i!==CFG.seatIndex) g.add(makeCrew());
+    deck.add(g);
+  }
+}
+
+function makeCrew(){
+  const grp=new THREE.Group();
+  const suit=new THREE.MeshStandardMaterial({color:0xf4f5f7,roughness:0.6});
+  const trim=new THREE.MeshStandardMaterial({color:0x15171b,roughness:0.5});
+  const torso=new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.2,0.6,16),suit);
+  torso.position.set(0,0.95,-0.05); torso.rotation.x=0.2; grp.add(torso);
+  const helmet=new THREE.Mesh(new THREE.SphereGeometry(0.15,20,16),suit);
+  helmet.position.set(0,1.32,-0.02); grp.add(helmet);
+  const visor=new THREE.Mesh(new THREE.SphereGeometry(0.13,20,16,0.6,2.0,0.7,1.2),
+    new THREE.MeshStandardMaterial({color:0x0b0e12,roughness:0.2,metalness:0.6}));
+  visor.position.copy(helmet.position); visor.position.z+=0.02; grp.add(visor);
+  // legs
+  [[-0.09],[0.09]].forEach(s=>{
+    const leg=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.06,0.55,12),suit);
+    leg.position.set(s[0],0.55,0.18); leg.rotation.x=1.1; grp.add(leg);
+  });
+  return grp;
+}
+
+/* ---- Console: three displays + black flip-cover control panel ---- */
+function buildConsole(){
+  const group=new THREE.Group();
+  exterior.panelGroup=group;
+  // center the whole console in front of the commander's seat
+  const seatX=(CFG.seatIndex-(CFG.seatRow-1)/2)*CFG.seatSpacing;
+  group.position.x=seatX;
+  // Mount bar (curved frame holding the screens)
+  const bar=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.5,0.06),
+    new THREE.MeshStandardMaterial({color:0x0d0f12,roughness:0.5,metalness:0.2}));
+  bar.position.set(0,1.42,-CFG.screenDist-0.22); group.add(bar);
+
+  const totalW=CFG.screenCount*CFG.screenW+(CFG.screenCount-1)*CFG.screenGap;
+  for(let i=0;i<CFG.screenCount;i++){
+    const cx=-totalW/2+CFG.screenW/2+i*(CFG.screenW+CFG.screenGap);
+    const {mesh,ctx,tex}=makeScreen(CFG.screenW,CFG.screenH,i);
+    mesh.position.set(cx,1.42,-CFG.screenDist);
+    mesh.rotation.x=CFG.screenFace;
+    // slight toe-in of side screens toward the centred eye
+    mesh.rotation.y=-cx*0.18;
+    group.add(mesh);
+    // bezel — sits BEHIND the screen face as a frame, never in front of it
+    const bez=new THREE.Mesh(new THREE.BoxGeometry(CFG.screenW+0.04,CFG.screenH+0.04,0.03),
+      new THREE.MeshStandardMaterial({color:0x070809,roughness:0.4,metalness:0.3}));
+    bez.position.copy(mesh.position); bez.rotation.copy(mesh.rotation); bez.translateZ(-0.045); group.add(bez);
+    screens[i]={ctx,tex,mesh};
+  }
+
+  // Black manual-control panel below the centre screen
+  const panel=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.34,0.06),
+    new THREE.MeshStandardMaterial({color:0x0a0b0d,roughness:0.45,metalness:0.25}));
+  panel.position.set(0,1.42-CFG.screenH/2-CFG.consoleDrop, -CFG.screenDist+0.16);
+  panel.rotation.x=CFG.screenTilt-0.5;
+  group.add(panel);
+
+  // Touch buttons ON the displays (checklist flow) — invisible hot-zones mapped to screen UI
+  // We model them as small planes slightly in front of the centre screen.
+  // hot-zones aligned with the on-screen button (centre-bottom of the display) + generous margin
+  addScreenButton('power',  0,-0.155, 0.32,0.12);
+  addScreenButton('eclss',  0,-0.155, 0.32,0.12);
+  addScreenButton('hatch',  0,-0.155, 0.32,0.12);
+  addScreenButton('poll',   0,-0.155, 0.32,0.12);
+  addScreenButton('launch', 0,-0.155, 0.32,0.12);
+
+  // Physical ARM button + flip guard on the panel
+  buildGuardedButton(group,'arm', -0.32, 0x39d98a, 'ARM');
+  // Physical ABORT button + red flip guard (always available once armed)
+  buildGuardedButton(group,'abort', 0.32, 0xff3b30, 'ABORT');
+  // Camera-select TOUCHSCREEN on the manual panel (replaces the old DISPLAY/CAMERA push-buttons):
+  // NAV on top, then one button per mounted camera. Tapping switches the centre screen source.
+  const cpY = 1.42-CFG.screenH/2-CFG.consoleDrop;
+  const cp = makeScreen(0.42, 0.30, 'cam');
+  cp.mesh.position.set(0, cpY, -CFG.screenDist+0.16);
+  cp.mesh.rotation.x = CFG.screenTilt-0.5;
+  cp.mesh.translateZ(0.045);
+  group.add(cp.mesh);
+  exterior.camPanel=cp.mesh; exterior.camPanelCtx=cp.ctx; exterior.camPanelTex=cp.tex;
+  // bezel behind it
+  const cpbez=new THREE.Mesh(new THREE.PlaneGeometry(0.46,0.34),
+    new THREE.MeshStandardMaterial({color:0x070809,roughness:0.4,metalness:0.3}));
+  cpbez.position.copy(cp.mesh.position); cpbez.rotation.copy(cp.mesh.rotation); cpbez.translateZ(-0.006); group.add(cpbez);
+  // invisible hit-zones, one per row
+  for(let i=0;i<CAM_BTNS.length;i++) addCamPanelButton(i, CAM_BTNS[i].key);
+  drawCamPanel();
+
+  // "REC ▸ <camera>" strip across the top of the centre screen, shown only on a camera feed
+  const lc=document.createElement('canvas'); lc.width=256; lc.height=36;
+  exterior.camLabelCanvas=lc; exterior.camLabelCtx=lc.getContext('2d');
+  exterior.camLabelTex=new THREE.CanvasTexture(lc);
+  const lbl=new THREE.Mesh(new THREE.PlaneGeometry(CFG.screenW*0.94,0.052),
+    new THREE.MeshBasicMaterial({map:exterior.camLabelTex,transparent:true}));
+  const cs=screens[1].mesh; lbl.position.copy(cs.position); lbl.rotation.copy(cs.rotation);
+  lbl.translateY(CFG.screenH/2-0.05); lbl.translateZ(0.014);
+  group.add(lbl); lbl.visible=false; exterior.camLabel=lbl;
+
+  // Docking HUD overlay (transparent, drawn over the centre screen in DOCK mode)
+  { const dov=makeScreen(CFG.screenW, CFG.screenH, 'dockhud');
+    dov.mesh.material.transparent=true; dov.mesh.material.depthWrite=false;
+    dov.mesh.position.copy(screens[1].mesh.position); dov.mesh.rotation.copy(screens[1].mesh.rotation);
+    dov.mesh.translateZ(0.005); dov.mesh.visible=false; group.add(dov.mesh);
+    dock.overlay=dov.mesh; dock.octx=dov.ctx; dock.otex=dov.tex; }
+
+  // DOCKING / NAV toggle switch on the panel (right side, outboard of ABORT)
+  { const g=new THREE.Group();
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(0.22,0.13,0.04),
+      new THREE.MeshStandardMaterial({color:0x14161a,roughness:0.5,metalness:0.3})));
+    const cvs=document.createElement('canvas'); cvs.width=200; cvs.height=120;
+    dock.swCtx=cvs.getContext('2d'); dock.swTex=new THREE.CanvasTexture(cvs);
+    const face=new THREE.Mesh(new THREE.PlaneGeometry(0.20,0.11), new THREE.MeshBasicMaterial({map:dock.swTex}));
+    face.position.z=0.021; g.add(face);
+    const hit=new THREE.Mesh(new THREE.PlaneGeometry(0.24,0.16), new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}));
+    hit.position.z=0.05; g.add(hit);
+    g.position.set(0.54, 1.42-CFG.screenH/2-CFG.consoleDrop, -CFG.screenDist+0.20);
+    g.rotation.x=CFG.screenTilt-0.5; group.add(g);
+    interactives.push({ mesh:hit, id:'dockToggle', enabled:true, onSelect:toggleDock });
+    paintDockSwitch();
+  }
+  // On-screen docking controls over the centre screen (enabled only in DOCK mode)
+  dock.ctlMode = addCenterHit(0.213, 0.165, 0.17, 0.05, ()=>{ dock.mode=dock.mode==='manual'?'auto':'manual'; beep(700,0.05); setDockControlsEnabled(); }, 'dockMode');
+  const rx=0.225, ry=-0.084, fx=-0.225, fy=-0.084;   // matches drawDockHUD pad geometry
+  dock.rcsBtns = [
+    addCenterHit(rx,       ry+0.037, 0.055,0.042, ()=>rcsImpulse(0, 0.05,0), 'rcsU'),
+    addCenterHit(rx,       ry-0.037, 0.055,0.042, ()=>rcsImpulse(0,-0.05,0), 'rcsD'),
+    addCenterHit(rx-0.046, ry,       0.055,0.042, ()=>rcsImpulse(-0.05,0,0), 'rcsL'),
+    addCenterHit(rx+0.046, ry,       0.055,0.042, ()=>rcsImpulse( 0.05,0,0), 'rcsR'),
+    addCenterHit(fx,       fy+0.022, 0.055,0.036, ()=>rcsImpulse(0,0,-0.06), 'rcsF'),  // close
+    addCenterHit(fx,       fy-0.022, 0.055,0.036, ()=>rcsImpulse(0,0, 0.06), 'rcsB'),  // back
+  ];
+
+  deck.add(group);
+}
+function paintCamLabel(name){
+  const c=exterior.camLabelCtx; if(!c) return; c.clearRect(0,0,256,36);
+  c.fillStyle='rgba(4,10,18,0.55)'; c.fillRect(0,0,256,36);
+  c.fillStyle='#ff3b30'; c.beginPath(); c.arc(16,18,6,0,6.2832); c.fill();
+  c.fillStyle='#e8eef5'; c.font='bold 16px monospace'; c.textAlign='left'; c.textBaseline='middle';
+  c.fillText('REC  '+name,30,19); exterior.camLabelTex.needsUpdate=true;
+}
+
+// A small labelled push-button on the manual panel.
+
+// Camera-select touchscreen: NAV plus one button per mounted camera (keys 0..N index exterior.cams)
+const CAM_BTNS = [
+  {key:'nav', label:'NAV'},
+  {key:0,     label:'NOSE CAM'},
+  {key:1,     label:'INTERSTAGE'},
+  {key:2,     label:'STAGE-1 \u2193'},
+  {key:3,     label:'STAGING'},
+  {key:4,     label:'TRUNK'},
+];
+function _rr(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r);
+  c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+function drawCamPanel(){
+  const c=exterior.camPanelCtx; if(!c) return;
+  const W=c.canvas.width, H=c.canvas.height, n=CAM_BTNS.length, pad=8, rh=(H-pad*2)/n;
+  const active = (centerMode==='nav') ? 'nav' : (centerMode==='cam') ? exterior.camIndex : -1;
+  c.fillStyle='#04101b'; c.fillRect(0,0,W,H);
+  CAM_BTNS.forEach((b,i)=>{
+    const y=pad+i*rh, on=(b.key===active), nav=(b.key==='nav');
+    const accent = nav ? '#3da9fc' : '#39d98a';
+    c.fillStyle = on ? accent : '#0e2233';
+    _rr(c,pad,y+3,W-pad*2,rh-6,10); c.fill();
+    c.lineWidth=3; c.strokeStyle = on ? accent : '#1d3a55'; _rr(c,pad,y+3,W-pad*2,rh-6,10); c.stroke();
+    if(on){ c.fillStyle='#04121f'; c.beginPath(); c.arc(pad+22, y+rh/2, 6, 0, 6.2832); c.fill(); }
+    c.fillStyle = on ? '#04121f' : '#cfe0f2';
+    c.font='bold 30px monospace'; c.textAlign='center'; c.textBaseline='middle';
+    c.fillText(b.label, W/2, y+rh/2);
+  });
+  exterior.camPanelTex.needsUpdate=true;
+}
+function addCamPanelButton(i,key){
+  const s=exterior.camPanel, ch=0.30;
+  const localY = ch/2 - (i+0.5)/CAM_BTNS.length*ch;
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(0.38, ch/CAM_BTNS.length-0.004),
+    new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}));
+  m.position.copy(s.position); m.rotation.copy(s.rotation);
+  m.translateY(localY); m.translateZ(0.006);
+  exterior.panelGroup.add(m);
+  interactives.push({ mesh:m, id:'camsel'+i, enabled:true, onSelect:()=>selectCam(key) });
+}
+function selectCam(key){
+  if(dock.on){ dock.on=false; if(dock.port) dock.port.visible=false; setDockControlsEnabled(); paintDockSwitch(); }
+  if(key==='nav'){
+    centerMode='nav';
+    screens[1].mesh.material.map = screens[1].tex;
+    if(exterior.camLabel) exterior.camLabel.visible=false;
+    beep(700,0.05);
+  } else {
+    centerMode='cam'; exterior.camIndex=key;
+    screens[1].mesh.material.map = exterior.topRT.texture;
+    if(exterior.camLabel){ exterior.camLabel.visible=true; paintCamLabel(exterior.cams[key].name); }
+    beep(765,0.05);
+  }
+  screens[1].mesh.material.needsUpdate = true;
+  drawCamPanel();
+}
+
+// A screen-UI "button" — a thin interactive plane in front of centre display.
+function addScreenButton(id,localX,localY,w,h){
+  const geo=new THREE.PlaneGeometry(w,h);
+  const mat=new THREE.MeshBasicMaterial({color:0x3da9fc,transparent:true,opacity:0.0});
+  const m=new THREE.Mesh(geo,mat);
+  const s=screens[1].mesh;
+  m.position.copy(s.position); m.rotation.copy(s.rotation);
+  m.translateX(localX); m.translateY(localY); m.translateZ(0.012);
+  exterior.panelGroup.add(m);
+  interactives.push({ mesh:m, id, mat, enabled:false, onSelect:()=>handleSelect(id) });
+}
+
+// Guarded physical button = base + lid that flips up, with a glowing button under it.
+function buildGuardedButton(group,id,localX,color,label){
+  const g=new THREE.Group();
+  const base=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.10,0.04),
+    new THREE.MeshStandardMaterial({color:0x16181c,roughness:0.5,metalness:0.3}));
+  g.add(base);
+  const btn=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.045,0.03,24),
+    new THREE.MeshStandardMaterial({color,emissive:color,emissiveIntensity:0.15,roughness:0.4}));
+  btn.rotation.x=Math.PI/2; btn.position.z=0.03; g.add(btn);
+  // flip guard
+  const lid=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.10,0.012),
+    new THREE.MeshStandardMaterial({color:id==='abort'?0x5a0d09:0x0c2a1c,roughness:0.5,metalness:0.2,
+      transparent:true,opacity:0.85}));
+  const hinge=new THREE.Group(); hinge.position.set(0,0.05,0.045); hinge.add(lid); lid.position.y=-0.05;
+  g.add(hinge);
+  // place on panel
+  g.position.set(localX,1.42-CFG.screenH/2-CFG.consoleDrop, -CFG.screenDist+0.20);
+  g.rotation.x=CFG.screenTilt-0.5;
+  group.add(g);
+  // large invisible hit-zone in front of the button for forgiving aim
+  const hit=new THREE.Mesh(new THREE.PlaneGeometry(0.17,0.13),
+    new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}));
+  hit.position.set(0,0,0.05); g.add(hit);
+  exterior[id+'Btn']={group:g, btn, hinge, color, open:false, label};
+  interactives.push({ mesh:lid, id:id+'_guard', enabled:true, onSelect:()=>toggleGuard(id) });
+  interactives.push({ mesh:hit, id, enabled:false, onSelect:()=>handleSelect(id) });
+}
+
+function toggleGuard(id){
+  const b=exterior[id+'Btn']; if(!b) return;
+  b.open=!b.open; beep(b.open?600:400,0.05);
+  // enable the underlying button only when guard open & step is valid
+  refreshButtonStates();
+}
+
+/* ---- Exterior: launch pad seen through windows ---- */
+function buildExterior(){
+  // everything outside the capsule lives in one group we can pitch/roll for flight & abort
+  const world=new THREE.Group(); scene.add(world); exterior.world=world;
+  // Sky dome (day) — tinted toward space during ascent
+  const sky=new THREE.Mesh(new THREE.SphereGeometry(600,32,24),
+    new THREE.MeshBasicMaterial({color:0x6fb0ee,side:THREE.BackSide, fog:false}));
+  world.add(sky); exterior.sky=sky;
+  // Star field, biased to the upper sky so it shows through the nose window. Hidden until high up.
+  const starGeo=new THREE.BufferGeometry(); const N=1400; const pos=new Float32Array(N*3);
+  for(let i=0;i<N;i++){ const u=Math.random(),v=Math.random(); const th=2*Math.PI*u, ph=Math.acos(2*v-1), rr=450;
+    pos[i*3]=rr*Math.sin(ph)*Math.cos(th); pos[i*3+1]=Math.abs(rr*Math.cos(ph))*0.9+20; pos[i*3+2]=rr*Math.sin(ph)*Math.sin(th); }
+  starGeo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  const stars=new THREE.Points(starGeo, new THREE.PointsMaterial({color:0xffffff,size:1.6,
+    transparent:true, opacity:0, depthWrite:false, fog:false}));
+  world.add(stars); exterior.stars=stars;
+  // Ground / pad far below
+  const ground=new THREE.Mesh(new THREE.CircleGeometry(800,48),
+    new THREE.MeshStandardMaterial({color:0x6b6f74,roughness:1.0}));
+  ground.rotation.x=-Math.PI/2; ground.position.y=-40; world.add(ground); exterior.ground=ground;
+  // Launch tower beside the capsule
+  const tower=new THREE.Group();
+  const steel=new THREE.MeshStandardMaterial({color:0x9aa1a8,roughness:0.7,metalness:0.4});
+  for(let y=0;y<14;y++){
+    const seg=new THREE.Mesh(new THREE.BoxGeometry(4,3,4),steel);
+    seg.position.set(0,-38+y*3,0);
+    const edges=new THREE.LineSegments(new THREE.EdgesGeometry(seg.geometry),
+      new THREE.LineBasicMaterial({color:0x3a3f45})); seg.add(edges);
+    tower.add(seg);
+  }
+  tower.position.set(14,0,-6); world.add(tower); exterior.tower=tower;
+  exterior.skyShift=0;
+}
+
+/* ---- Crew Access Arm / White Room on the pad, seen through the open hatch (-Z side) ---- */
+function buildBoardingArm(){
+  const g=new THREE.Group(); scene.add(g); exterior.boardingArm=g;
+  const white=new THREE.MeshStandardMaterial({color:0xeef1f4,roughness:0.75,metalness:0.05,side:THREE.DoubleSide});
+  const gray =new THREE.MeshStandardMaterial({color:0xaab2ba,roughness:0.6,metalness:0.3,side:THREE.DoubleSide});
+  const rail =new THREE.MeshStandardMaterial({color:0xd0d5da,roughness:0.5,metalness:0.4});
+  const zNear=-1.62, zFar=-3.0, rw=0.78, rt=2.4, rb=1.0, midZ=(zNear+zFar)/2;
+  // White Room tunnel (open at both ends): top, bottom, two sides
+  const top=new THREE.Mesh(new THREE.PlaneGeometry(rw*2, zNear-zFar), white); top.rotation.x=Math.PI/2; top.position.set(0,rt,midZ); g.add(top);
+  const bot=new THREE.Mesh(new THREE.PlaneGeometry(rw*2, zNear-zFar), white); bot.rotation.x=Math.PI/2; bot.position.set(0,rb,midZ); g.add(bot);
+  const lft=new THREE.Mesh(new THREE.PlaneGeometry(zNear-zFar, rt-rb), white); lft.rotation.y=Math.PI/2; lft.position.set(-rw,(rt+rb)/2,midZ); g.add(lft);
+  const rgt=new THREE.Mesh(new THREE.PlaneGeometry(zNear-zFar, rt-rb), white); rgt.rotation.y=Math.PI/2; rgt.position.set( rw,(rt+rb)/2,midZ); g.add(rgt);
+  // walkway floor extending out to the tower
+  const walkY=1.12, wlen=7;
+  const floor=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.06,wlen), gray); floor.position.set(0,walkY,zFar-wlen/2+0.2); g.add(floor);
+  // side railings with posts
+  [-0.55,0.55].forEach(x=>{
+    const r=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.04,wlen), rail); r.position.set(x,walkY+0.6,zFar-wlen/2+0.2); g.add(r);
+    for(let i=0;i<7;i++){ const p=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.6,0.04), rail); p.position.set(x,walkY+0.3,zFar-0.4-i*1.0); g.add(p); }
+  });
+  // a couple of cross beams under the walkway (truss feel)
+  for(let i=0;i<5;i++){ const b=new THREE.Mesh(new THREE.BoxGeometry(1.25,0.05,0.05), gray); b.position.set(0,walkY-0.28,zFar-0.8-i*1.3); g.add(b); }
+  // launch-tower structure at the far end
+  const tower=new THREE.Mesh(new THREE.BoxGeometry(2.2,7,2.2),
+    new THREE.MeshStandardMaterial({color:0x9098a0,roughness:0.7,metalness:0.4}));
+  tower.position.set(0,3.2,zFar-wlen-0.6); g.add(tower);
+  const edges=new THREE.LineSegments(new THREE.EdgesGeometry(tower.geometry), new THREE.LineBasicMaterial({color:0x565e66}));
+  edges.position.copy(tower.position); g.add(edges);
+}
+
+/* ---- External Falcon 9 + Dragon stack (below the capsule) so the cameras see a real vehicle ---- */
+function makePlume(r,len,color){
+  const g=new THREE.Group();
+  const cone=new THREE.Mesh(new THREE.ConeGeometry(r,len,20,1,true),
+    new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.5,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide,fog:false}));
+  cone.rotation.x=Math.PI; cone.position.y=-len/2; g.add(cone);
+  const core=new THREE.Mesh(new THREE.ConeGeometry(r*0.5,len*0.78,16,1,true),
+    new THREE.MeshBasicMaterial({color:0xfff2d0,transparent:true,opacity:0.55,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));
+  core.rotation.x=Math.PI; core.position.y=-len*0.4; g.add(core);
+  g.visible=false; return g;
+}
+function setPlume(g,on,flick){ if(!g) return; g.visible=on; if(on) g.scale.set(1,flick,1); }
+
+function buildStack(){
+  const stack=new THREE.Group(); scene.add(stack); exterior.stack=stack;
+  const R=1.85;
+  const white=new THREE.MeshStandardMaterial({color:0xf3f4f6,roughness:0.55,metalness:0.12});
+  const black=new THREE.MeshStandardMaterial({color:0x191b1e,roughness:0.6,metalness:0.25});
+  const dark =new THREE.MeshStandardMaterial({color:0x33373c,roughness:0.5,metalness:0.6});
+  const metal=new THREE.MeshStandardMaterial({color:0x8a9099,roughness:0.45,metalness:0.7});
+  const cyl=(rt,rb,h,mat)=>new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,40,1,false),mat);
+
+  // ----- VEHICLE (Dragon trunk + second stage; stays with the capsule) -----
+  const trunk=cyl(R,R,3.2,white); trunk.position.y=-1.6; stack.add(trunk);
+  const solar=cyl(R+0.012,R+0.012,1.7,black); solar.position.y=-1.9; stack.add(solar);   // solar-array band
+  for(let i=0;i<4;i++){ const a=i/4*Math.PI*2; const f=new THREE.Mesh(new THREE.BoxGeometry(0.05,1.5,0.95),white);
+    f.position.set(Math.cos(a)*(R+0.02),-2.9,Math.sin(a)*(R+0.02)); f.rotation.y=-a; stack.add(f); }        // trunk fins
+  const s2=cyl(R,R,9.6,white); s2.position.y=-8.0; stack.add(s2);                          // second stage tank (-3.2..-12.8)
+  const mvac=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.72,1.3,24,1,true),dark);
+  mvac.position.y=-13.5; stack.add(mvac); exterior.mvac=mvac;                              // MVac bell (exposed after sep)
+  exterior.mvacPlume=makePlume(0.62,3.4,0x9fc2ff); exterior.mvacPlume.position.y=-14.1; stack.add(exterior.mvacPlume);
+
+  // ----- BOOSTER (first stage; separates & tumbles). Group centred at abs y=-30 -----
+  const booster=new THREE.Group(); booster.position.y=-30; stack.add(booster); exterior.booster=booster;
+  const inter=cyl(R,R,2.0,black); inter.position.y=15; booster.add(inter);                 // black interstage (abs -14..-16)
+  const body=cyl(R,R,28,white); body.position.y=0; booster.add(body);                      // body (abs -16..-44)
+  for(let i=0;i<4;i++){ const a=i/4*Math.PI*2+Math.PI/4; const gf=new THREE.Mesh(new THREE.BoxGeometry(0.95,0.9,0.08),metal);
+    gf.position.set(Math.cos(a)*(R+0.32),13.4,Math.sin(a)*(R+0.32)); gf.rotation.y=-a; booster.add(gf); }     // grid fins
+  for(let i=0;i<4;i++){ const a=i/4*Math.PI*2+Math.PI/4; const leg=new THREE.Mesh(new THREE.BoxGeometry(0.2,7,0.55),black);
+    leg.position.set(Math.cos(a)*(R+0.04),-9,Math.sin(a)*(R+0.04)); leg.rotation.y=-a; booster.add(leg); }     // stowed legs
+  const oct=cyl(R,R*0.92,1.2,dark); oct.position.y=-14.6; booster.add(oct);                 // octaweb
+  for(let i=0;i<8;i++){ const a=i/8*Math.PI*2; const e=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.34,0.85,14,1,true),dark);
+    e.position.set(Math.cos(a)*1.05,-15.45,Math.sin(a)*1.05); booster.add(e); }
+  const ec=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.34,0.85,14,1,true),dark); ec.position.y=-15.45; booster.add(ec);
+  exterior.boosterPlume=makePlume(1.5,7.5,0xffb066); exterior.boosterPlume.position.y=-16.2; booster.add(exterior.boosterPlume);
+}
+
+// Mount a camera; localPos is in the parent's local frame, target is in world space (parents are unrotated at build).
+function addCam(id,name,localPos,worldTarget,up,parent){
+  const c=new THREE.PerspectiveCamera(64,512/330,0.05,4000);
+  if(up) c.up.copy(up);
+  parent.add(c); c.position.copy(localPos);
+  parent.updateMatrixWorld(true); c.lookAt(worldTarget);
+  exterior.cams.push({id,name,cam:c});
+}
+
+// Engine plumes + first-stage separation, tied to the ascent timeline.
+function updateStackFX(dt){
+  const t=tele.t, flying=sysState.launched && !sysState.aborted;
+  setPlume(exterior.boosterPlume, flying && t>-0.3 && t<CFG.tMECO, 0.9+Math.random()*0.25);
+  setPlume(exterior.mvacPlume,    flying && t>CFG.tSep+2 && t<CFG.tOrbit, 0.85+Math.random()*0.2);
+  if(exterior.booster){
+    if(flying && t>CFG.tSep){ const d=t-CFG.tSep;
+      exterior.booster.position.y = -30 - 0.4*d*d;      // accelerates away below the vehicle
+      exterior.booster.rotation.z = d*0.12;             // slow end-over-end tumble
+      exterior.booster.rotation.x = d*0.05;
+    } else { exterior.booster.position.y=-30; exterior.booster.rotation.set(0,0,0); }
+  }
+}
+
+
+/* ---- Parachutes: drogues then mains, hung above the nose (seen through the top window on abort) ---- */
+function makeChute(radius, color){
+  const g=new THREE.Group();
+  const canopy=new THREE.Mesh(new THREE.SphereGeometry(radius,18,12,0,Math.PI*2,0,Math.PI*0.5),
+    new THREE.MeshStandardMaterial({color, roughness:0.95, metalness:0.0, side:THREE.DoubleSide}));
+  canopy.position.y=radius*1.7; g.add(canopy);
+  const lineMat=new THREE.LineBasicMaterial({color:0xd8dde3, transparent:true, opacity:0.7});
+  for(let i=0;i<10;i++){ const a=i/10*Math.PI*2;
+    const top=new THREE.Vector3(Math.cos(a)*radius*0.92, radius*1.7, Math.sin(a)*radius*0.92);
+    const lg=new THREE.BufferGeometry().setFromPoints([top, new THREE.Vector3(0,0,0)]);
+    g.add(new THREE.Line(lg,lineMat)); }
+  return g;
+}
+function buildChutes(){
+  const sys=new THREE.Group(); sys.position.set(0,3.3,0); sys.visible=false; scene.add(sys);
+  exterior.chuteSys=sys;
+  const drg=new THREE.Group(); sys.add(drg); exterior.drogues=drg;
+  [-0.12,0.12].forEach(x=>{ const c=makeChute(0.55,0xc6ccd4); c.position.set(x,-0.25,0); c.scale.setScalar(0.001); drg.add(c); });
+  const mn=new THREE.Group(); sys.add(mn); exterior.mains=mn;
+  const cols=[0xff7a1a,0xf4f4f4,0xff7a1a,0xf4f4f4];
+  [[-1.0,0],[1.0,0],[0,1.0],[0,-1.0]].forEach((p,i)=>{
+    const c=makeChute(1.05,cols[i]); c.position.set(p[0],0.3,p[1]); c.scale.setScalar(0.001); mn.add(c); });
+}
+function lerpScale(group,target,dt,rate){ if(!group) return; const r=rate||4;
+  group.children.forEach(c=>{ const s=c.scale.x+(target-c.scale.x)*Math.min(1,dt*r); c.scale.setScalar(Math.max(0.001,s)); }); }
+function startHatchClose(){
+  if(hatchAnim.state!=='open') return;
+  hatchAnim.state='closing'; hatchAnim.t=0; clunk();
+  refreshButtonStates();
+}
+function easeInOut(x){ return x<0.5 ? 2*x*x : 1-Math.pow(-2*x+2,2)/2; }
+function updateHatch(dt){
+  const h=exterior.hatchHinge; if(!h) return;
+  if(hatchAnim.state==='closing'){
+    hatchAnim.t+=dt; const k=Math.min(1, hatchAnim.t/2.8);      // slow swing shut (~2.8 s)
+    h.rotation.y = hatchAnim.open*(1-easeInOut(k));
+    if(k>=1){ hatchAnim.state='sealing'; hatchAnim.t=0; thump(); }
+  } else if(hatchAnim.state==='sealing'){
+    hatchAnim.t+=dt; const k=Math.min(1, hatchAnim.t/1.0);      // latch turns + light goes green
+    if(exterior.hatchLatch) exterior.hatchLatch.rotation.z = k*Math.PI*0.45;
+    if(exterior.hatchLight) exterior.hatchLight.material.color.setRGB(0.9-0.7*k, 0.3+0.55*k, 0.28+0.05*k);
+    if(k>=1){ hatchAnim.state='sealed'; sysState.hatch=true; beep(880,0.09); advance('hatch'); }
+  }
+}
+function updateChutes(dt){
+  const sys=exterior.chuteSys; if(!sys) return;
+  lerpScale(exterior.drogues, (sysState.drogues && !sysState.mains)?1:0.001, dt);
+  if(sysState.splashed){
+    // mains detach and drift off ABOVE the nose — never into the cabin — deflating gently, then hide
+    const m=exterior.mains;
+    m.position.y = Math.max(-0.15, m.position.y - dt*0.35);   // small settle; stays well above the cap
+    m.position.x += dt*0.5;                                   // drift downwind, away from the nose
+    lerpScale(m, 0.001, dt, 0.5);
+    sys.position.set(0,3.3,0);
+    if(m.children[0] && m.children[0].scale.x < 0.05) sys.visible=false;
+  } else {
+    exterior.mains.position.set(0,0,0);
+    lerpScale(exterior.mains, sysState.mains?1:0.001, dt);
+  }
+  sys.visible = sysState.aborted && (sysState.drogues || sysState.mains);
+  if(sys.visible && !sysState.splashed){ const t=tele.t;
+    sys.rotation.z=Math.sin(t*1.2)*0.06; sys.rotation.x=Math.sin(t*1.5)*0.05;
+    sys.position.set(Math.sin(t*1.0)*0.12, 3.3, Math.cos(t*0.9)*0.12); }
+}
+
+/* ===========================================================================
+   SCREEN RENDERING (canvas textures, real Dragon-style UI)
+=========================================================================== */
+function makeScreen(w,h,idx){
+  const canvas=document.createElement('canvas'); canvas.width=512; canvas.height=Math.round(512*h/w);
+  const ctx=canvas.getContext('2d');
+  const tex=new THREE.CanvasTexture(canvas); tex.anisotropy=4;
+  const mat=new THREE.MeshBasicMaterial({map:tex});
+  const mesh=new THREE.Mesh(new THREE.PlaneGeometry(w,h),mat);
+  mesh.userData.role=idx; // 0 left=systems, 1 centre=nav/checklist, 2 right=comms/timeline
+  return {mesh,ctx,tex};
+}
+
+function drawScreens(){
+  drawSystems(screens[0].ctx); screens[0].tex.needsUpdate=true;
+  drawNav(screens[1].ctx);     screens[1].tex.needsUpdate=true;
+  drawTimeline(screens[2].ctx);screens[2].tex.needsUpdate=true;
+  const dk = centerMode==='dock';
+  if(dock.overlay){ dock.overlay.visible=dk; if(dk) drawDockHUD(dock.octx); }
+}
+
+function scr(ctx,fn){ const W=ctx.canvas.width,H=ctx.canvas.height;
+  ctx.fillStyle='#04070c'; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='#10283f'; ctx.lineWidth=2; ctx.strokeRect(6,6,W-12,H-12);
+  fn(W,H); }
+
+function header(ctx,W,txt,col){ ctx.fillStyle=col||'#3da9fc'; ctx.font='600 20px Menlo,Consolas,monospace';
+  ctx.fillText(txt,18,32); ctx.strokeStyle='#10283f'; ctx.beginPath();
+  ctx.moveTo(14,44); ctx.lineTo(W-14,44); ctx.stroke(); }
+
+function drawSystems(ctx){ scr(ctx,(W,H)=>{
+  header(ctx,W,'VEHICLE · SYSTEMS', sysState.aborted?'#ff5b4a':'#3da9fc');
+  const rows=[
+    ['POWER',     sysState.power],
+    ['ECLSS',     sysState.eclss],
+    ['HATCH SEAL',sysState.hatch],
+    ['LAUNCH ESC',sysState.arm],
+    ['PROPULSION', tele.t>-CFG.ignition],
+    ['GUIDANCE',  sysState.power],
+  ];
+  ctx.font='15px Menlo,Consolas,monospace';
+  rows.forEach((r,i)=>{ const y=74+i*26;
+    ctx.fillStyle='#9fb0c8'; ctx.fillText(r[0],22,y);
+    ctx.fillStyle=r[1]?'#39d98a':'#5a6678'; ctx.fillText(r[1]?'● NOMINAL':'○ STANDBY',180,y); });
+  // gauges
+  ctx.font='13px Menlo,Consolas,monospace';
+  ctx.fillStyle='#7c8aa0';
+  ctx.fillText('CABIN  '+tele.cabin.toFixed(1)+' psi',22,H-58);
+  ctx.fillText('PROP   '+tele.fuel.toFixed(0)+' %',22,H-38);
+  ctx.fillText('G-LOAD '+tele.accel.toFixed(2)+' g',22,H-18);
+}); }
+
+// Little Falcon 9 icon, drawn nose toward +x then rotated to the flight path.
+function drawFalcon(ctx, x, y, ang, mode, flame, s){
+  ctx.save(); ctx.translate(x,y); ctx.rotate(ang);
+  const w=3*s;
+  if(flame){
+    ctx.fillStyle='#ffcf6b'; ctx.beginPath();
+    ctx.moveTo(-9*s,0); ctx.lineTo(-15*s-Math.random()*5*s,-1.6*s); ctx.lineTo(-15*s-Math.random()*5*s,1.6*s); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#ff7a1a'; ctx.beginPath();
+    ctx.moveTo(-9*s,0); ctx.lineTo(-12*s,-1*s); ctx.lineTo(-12*s,1*s); ctx.closePath(); ctx.fill();
+  }
+  if(mode==='full'){
+    ctx.fillStyle='#e9edf1'; ctx.fillRect(-9*s,-w,13*s,2*w);              // first stage
+    ctx.fillStyle='#aeb6c0'; ctx.fillRect(4*s,-w,1.4*s,2*w);             // interstage
+    ctx.fillStyle='#e9edf1'; ctx.fillRect(5.4*s,-w*0.85,6.6*s,1.7*w);    // second stage
+    ctx.fillStyle='#cdd6df'; ctx.beginPath();                           // Dragon
+    ctx.moveTo(12*s,-w*0.85); ctx.lineTo(15*s,-w*0.45); ctx.lineTo(17.5*s,0); ctx.lineTo(15*s,w*0.45); ctx.lineTo(12*s,w*0.85); ctx.closePath(); ctx.fill();
+  } else if(mode==='upper'){
+    ctx.fillStyle='#e9edf1'; ctx.fillRect(-6*s,-w*0.85,8*s,1.7*w);
+    ctx.fillStyle='#cdd6df'; ctx.beginPath();
+    ctx.moveTo(2*s,-w*0.85); ctx.lineTo(5*s,-w*0.45); ctx.lineTo(7.5*s,0); ctx.lineTo(5*s,w*0.45); ctx.lineTo(2*s,w*0.85); ctx.closePath(); ctx.fill();
+  } else {
+    ctx.fillStyle='#cdd6df'; ctx.beginPath();
+    ctx.moveTo(-3*s,-w); ctx.lineTo(1*s,-w*0.6); ctx.lineTo(4*s,0); ctx.lineTo(1*s,w*0.6); ctx.lineTo(-3*s,w); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawNav(ctx){ scr(ctx,(W,H)=>{
+  if(sysState.aborted){ header(ctx,W,'ABORT · LAUNCH ESCAPE','#ff5b4a');
+    ctx.fillStyle='#ff5b4a'; ctx.font='600 26px Menlo,monospace';
+    ctx.fillText('SUPER DRACO',60,H/2-10); ctx.font='16px Menlo,monospace';
+    ctx.fillStyle='#ffd1cc'; ctx.fillText(tele.phase,60,H/2+24); return; }
+
+  const launched = sysState.launched;
+  const inOrbit  = launched && tele.t>=CFG.tOrbit;
+  const tClock=()=>{ if(!isFinite(tele.t)) return 'T--:--'; const tt=tele.t,s=tt<0?'-':'+',a=Math.abs(tt);
+    return 'T'+s+String(Math.floor(a/60)).padStart(2,'0')+':'+String(Math.floor(a%60)).padStart(2,'0'); };
+  const drawClock=()=>{ ctx.fillStyle='#3da9fc'; ctx.font='600 16px Menlo,monospace'; ctx.textAlign='right';
+    ctx.fillText(tClock(),W-16,32); ctx.textAlign='left'; };
+
+  if(inOrbit){
+    header(ctx,W,'NAV · ORBIT');
+    const cx=W*0.5, cy=H*0.56, rE=48, rO=92;
+    const grd=ctx.createRadialGradient(cx-rE*0.35,cy-rE*0.35,rE*0.2,cx,cy,rE);
+    grd.addColorStop(0,'#2f77b8'); grd.addColorStop(1,'#0a2c4d');
+    ctx.fillStyle=grd; ctx.beginPath(); ctx.arc(cx,cy,rE,0,7); ctx.fill();
+    ctx.strokeStyle='#3da9fc'; ctx.globalAlpha=0.4; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(cx,cy,rE,0,7); ctx.stroke(); ctx.globalAlpha=1;
+    ctx.strokeStyle='#2a5f86'; ctx.setLineDash([5,5]); ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(cx,cy,rO,0,7); ctx.stroke(); ctx.setLineDash([]);
+    const th=(tele.t-CFG.tOrbit)*0.25 - Math.PI/2;
+    ctx.strokeStyle='#3da9fc'; ctx.globalAlpha=0.55; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(cx,cy,rO,th-0.8,th); ctx.stroke(); ctx.globalAlpha=1;
+    const dx=cx+Math.cos(th)*rO, dy=cy+Math.sin(th)*rO;
+    ctx.fillStyle='#e8eef5'; ctx.beginPath(); ctx.arc(dx,dy,4,0,7); ctx.fill();
+    ctx.fillStyle='#9fb0c8'; ctx.font='11px Menlo,monospace'; ctx.fillText('DRAGON',dx+8,dy+4);
+    ctx.fillStyle='#39d98a'; ctx.font='12px Menlo,monospace'; ctx.textAlign='center';
+    ctx.fillText('ORBIT INSERTION COMPLETE',cx,H-16); ctx.textAlign='left';
+    ctx.fillStyle='#e8eef5'; ctx.font='600 18px Menlo,monospace'; ctx.fillText((tele.alt/1000).toFixed(0)+' km',20,72);
+    ctx.fillStyle='#9fb0c8'; ctx.font='13px Menlo,monospace'; ctx.fillText('V '+(tele.vel/1000).toFixed(2)+' km/s',20,92);
+    drawClock(); return;
+  }
+
+  header(ctx,W,'NAV · ASCENT');
+  const xL=48,xR=W-22,yB=H-30,yT=56;
+  const aOf=(p)=>1-Math.pow(1-p,2.2), dOf=(p)=>Math.pow(p,1.7);
+  const pos=(p)=>[xL+dOf(p)*(xR-xL), yB-aOf(p)*(yB-yT)];
+  // ground line
+  ctx.strokeStyle='#24455f'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(xL-6,yB); ctx.lineTo(xR,yB); ctx.stroke();
+  // planned trajectory (faint) + flown portion (bright)
+  ctx.strokeStyle='#173a57'; ctx.lineWidth=2; ctx.beginPath();
+  for(let i=0;i<=60;i++){ const q=pos(i/60); i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]); } ctx.stroke();
+  const pNow=Math.max(0,Math.min(1, launched? tele.t/CFG.tOrbit : 0));
+  ctx.strokeStyle='#3da9fc'; ctx.lineWidth=2.5; ctx.beginPath();
+  for(let i=0;i<=60;i++){ const q=pos(i/60*pNow); i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]); } ctx.stroke();
+  // event marks with leader lines to spread the staging cluster
+  const EV=[
+    {t:0,           txt:'LIFTOFF',   lx:xL+8,  ly:yB-2},
+    {t:CFG.tMaxQ,   txt:'MAX-Q',     lx:16,    ly:252},
+    {t:CFG.tMECO,   txt:'MECO',      lx:16,    ly:150},
+    {t:CFG.tSep,    txt:'STAGE SEP', lx:16,    ly:172},
+    {t:CFG.tSep+8,  txt:'2ND STAGE', lx:16,    ly:194},
+    {t:CFG.tOrbit,  txt:'SECO',      lx:xR-42, ly:yT+2},
+  ];
+  ctx.font='9px Menlo,monospace';
+  EV.forEach(e=>{
+    const q=pos(Math.min(1,e.t/CFG.tOrbit)); const dx=q[0],dy=q[1];
+    const done=launched&&tele.t>=e.t;
+    const tw=ctx.measureText(e.txt).width;
+    // leader line from the label edge nearest the dot to the dot
+    const lr=e.lx+tw;
+    const ax = dx>lr+3 ? lr+3 : (dx<e.lx-3 ? e.lx-3 : dx);
+    ctx.strokeStyle=done?'#2f6b4e':'#33475c'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(ax,e.ly-3); ctx.lineTo(dx,dy); ctx.stroke();
+    // dot + label
+    ctx.fillStyle=done?'#39d98a':'#54677d'; ctx.beginPath(); ctx.arc(dx,dy,3,0,7); ctx.fill();
+    ctx.fillStyle=done?'#cfe6d8':'#8a99ab'; ctx.fillText(e.txt,e.lx,e.ly);
+  });
+  // spent first stage tumbling back after separation
+  if(launched && tele.t>=CFG.tSep){ const s0=pos(CFG.tSep/CFG.tOrbit); const fall=Math.min(70,(tele.t-CFG.tSep)*3);
+    ctx.save(); ctx.translate(s0[0]-fall*0.4, s0[1]+fall); ctx.rotate(2.3);
+    ctx.fillStyle='#8b929c'; ctx.fillRect(-6,-2,12,4); ctx.restore(); }
+  // current vehicle
+  let mode='full', flame=false;
+  if(launched){ if(tele.t<CFG.tSep){ mode='full'; flame=tele.t<CFG.tMECO; }
+                else { mode='upper'; flame=tele.t>CFG.tSep+3 && tele.t<CFG.tOrbit; } }
+  const eps=0.008, a0=pos(Math.max(0,pNow-eps)), a1=pos(Math.min(1,pNow+eps));
+  const ang=Math.atan2(a1[1]-a0[1], a1[0]-a0[0]); const v=pos(pNow);
+  drawFalcon(ctx, v[0], v[1], ang, mode, flame, launched?1.0:1.1);
+  // readouts
+  ctx.fillStyle='#e8eef5'; ctx.font='600 20px Menlo,monospace'; ctx.fillText((tele.alt/1000).toFixed(1)+' km',20,72);
+  ctx.fillStyle='#9fb0c8'; ctx.font='13px Menlo,monospace'; ctx.fillText('V '+tele.vel.toFixed(0)+' m/s',20,92);
+  drawClock();
+  // checklist prompt (pre-launch)
+  const c=currentCheck();
+  if(c && !launched){
+    const label= c.id==='power'?'POWER':c.id==='eclss'?'START ECLSS':c.id==='hatch'?'HATCH SEAL':
+      c.id==='poll'?'GO FOR LAUNCH':c.id==='launch'?'START SEQUENCE':'';
+    if(label){ const cx=W*0.5, bw=200,bh=40,bx=cx-bw/2,by=H-56;
+      const hot = highlighted && highlighted.id===c.id;
+      ctx.fillStyle=hot?'#1d6fb8':'#0e2c46'; ctx.strokeStyle='#3da9fc'; ctx.lineWidth=2;
+      ctx.fillRect(bx,by,bw,bh); ctx.strokeRect(bx,by,bw,bh);
+      ctx.fillStyle='#e8eef5'; ctx.font='600 16px Menlo,monospace'; ctx.textAlign='center';
+      ctx.fillText(label,cx,by+26); ctx.textAlign='left'; }
+  }
+}); }
+
+function drawTimeline(ctx){ scr(ctx,(W,H)=>{
+  header(ctx,W,'MISSION · TIMELINE', sysState.aborted?'#ff5b4a':'#3da9fc');
+  const events=[
+    ['LIFTOFF', 0], ['MAX-Q', CFG.tMaxQ], ['MECO', CFG.tMECO],
+    ['STAGE SEP', CFG.tSep], ['ORBIT', CFG.tOrbit]
+  ];
+  ctx.font='14px Menlo,monospace';
+  events.forEach((e,i)=>{ const y=72+i*30;
+    const done = tele.t>=e[1] && sysState.launched && !sysState.aborted;
+    ctx.fillStyle=done?'#39d98a':'#5a6678'; ctx.fillText(done?'●':'○',22,y);
+    ctx.fillStyle=done?'#e8eef5':'#7c8aa0'; ctx.fillText(e[0],46,y);
+    ctx.fillStyle='#5a6678'; ctx.fillText('T+'+e[1]+'s',W-110,y); });
+  // status line
+  ctx.font='13px Menlo,monospace'; ctx.fillStyle='#7c8aa0';
+  ctx.fillText('PHASE: '+tele.phase, 22, H-20);
+}); }
+
+/* ===========================================================================
+   SELECTION / GAME LOGIC
+=========================================================================== */
+function refreshButtonStates(){
+  const c=currentCheck();
+  // screen buttons enabled only for the matching step
+  interactives.forEach(it=>{
+    if(['power','eclss','hatch','poll','launch'].includes(it.id))
+      it.enabled = c && c.id===it.id && !sysState.launched;
+  });
+  // hatch button only live while the hatch is still open
+  const hatchIt=interactives.find(i=>i.id==='hatch');
+  if(hatchIt && hatchIt.enabled) hatchIt.enabled = hatchAnim.state==='open';
+  // ARM button enabled when at 'arm' step and guard open
+  const armIt=interactives.find(i=>i.id==='arm');
+  if(armIt) armIt.enabled = (c&&c.id==='arm') && exterior.armBtn.open && !sysState.arm;
+  // ABORT enabled any time after ARM, guard open, not yet aborted
+  const abIt=interactives.find(i=>i.id==='abort');
+  if(abIt) abIt.enabled = sysState.arm && exterior.abortBtn.open && !sysState.aborted;
+  // flip covers: clickable only while CLOSED (and relevant); once open the button takes over
+  const atArm = c && c.id==='arm';
+  const armGuard=interactives.find(i=>i.id==='arm_guard');
+  if(armGuard) armGuard.enabled = atArm && !exterior.armBtn.open && !sysState.arm;
+  const abGuard=interactives.find(i=>i.id==='abort_guard');
+  if(abGuard) abGuard.enabled = sysState.arm && !exterior.abortBtn.open && !sysState.aborted;
+  drawScreens();
+}
+
+function handleSelect(id){
+  if(id==='abort'){ doAbort(); return; }
+  switch(id){
+    case 'power':  sysState.power=true; beep(660,0.08); advance('power'); break;
+    case 'eclss':  sysState.eclss=true; tele.cabin=14.7; hiss(); advance('eclss'); break;
+    case 'hatch':  startHatchClose(); break;
+    case 'arm':    sysState.arm=true; exterior.armBtn.btn.material.emissiveIntensity=0.8;
+                   beep(520,0.12); advance('arm'); break;
+    case 'poll':   sysState.poll=true; beep(740,0.08); advance('poll'); break;
+    case 'launch': beginAutoSequence(); advance('launch'); break;
+  }
+  refreshButtonStates();
+}
+
+function beginAutoSequence(){
+  sysState.launched=true; tele.t=-CFG.autoSeqHold; tele.phase='AUTO SEQUENCE';
+  hud.step.textContent='AUTO SEQUENCE'; hud.desc.textContent='Hold for liftoff. SuperDraco armed — abort guard is live.';
+}
+
+function doAbort(){
+  if(sysState.aborted) return;
+  sysState.aborted=true; tele.t=0; tele.accel=0;   // restart abort clock
+  tele.highAbort = tele.alt > CFG.highAbortAlt;
+  tele.maxAlt = tele.alt;
+  if(tele.highAbort){
+    tele.vel = -CFG.deorbitKick;                   // stop treating orbital speed as vertical; start descending
+    tele.reentry = false;
+    tele.phase='DEORBIT — FALLING';
+    hud.step.textContent='ABORT'; hud.desc.textContent='Off-nominal. Deorbiting for emergency reentry and splashdown.';
+  } else {
+    tele.phase='ABORT — ESCAPE BURN';
+    hud.step.textContent='ABORT'; hud.desc.textContent='SuperDraco escape burn. Pulling away from the pad…';
+  }
+  klaxon(); superDracoRumble();
+  refreshButtonStates();
+}
+
+/* ===========================================================================
+   INPUT / MODE SETUP
+=========================================================================== */
+function setupMode(m){
+  document.getElementById('exit').onclick=()=>location.reload();
+  if(m==='vr'){ setupVR(); }
+  else { setupPointer(m); document.getElementById('crosshair').style.display='block'; }
+  window.addEventListener('resize',onResize);
+}
+
+function onResize(){ if(!camera) return;
+  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight); }
+
+function setupPointer(m){
+  const dom=renderer.domElement;
+  document.getElementById('hint').style.display='block';
+  document.getElementById('hint').textContent = m==='mobile'
+    ? 'Drag to look · tap a glowing control' : 'Drag to look · click a glowing control';
+  const down=(x,y)=>{ look.dragging=true; look.lx=x; look.ly=y; };
+  const move=(x,y)=>{ if(!look.dragging) return;
+    look.yaw -= (x-look.lx)*0.0042; look.pitch -= (y-look.ly)*0.0042;
+    look.pitch=Math.max(-0.9,Math.min(0.9,look.pitch)); look.lx=x; look.ly=y; };
+  const up=()=>{ look.dragging=false; };
+  dom.addEventListener('mousedown',e=>down(e.clientX,e.clientY));
+  window.addEventListener('mousemove',e=>move(e.clientX,e.clientY));
+  window.addEventListener('mouseup',up);
+  dom.addEventListener('touchstart',e=>{ const t=e.touches[0]; down(t.clientX,t.clientY); },{passive:true});
+  dom.addEventListener('touchmove',e=>{ const t=e.touches[0]; move(t.clientX,t.clientY); },{passive:true});
+  dom.addEventListener('touchend',up);
+  // click/tap to select whatever the reticle is on
+  const tryClick=()=>{ ensureAudio();
+    camera.rotation.set(look.pitch,look.yaw,0,'YXZ'); camera.updateMatrixWorld();
+    raycaster.setFromCamera({x:0,y:0},camera);
+    const hit=pickInteractive();
+    if(hit) hit.onSelect();
+  };
+  dom.addEventListener('click',tryClick);
+  // keyboard RCS for manual docking (desktop)
+  window.addEventListener('keydown',e=>{
+    if(!dock.on || dock.mode!=='manual') return;
+    switch(e.code){
+      case 'ArrowUp':    rcsImpulse(0, 0.05,0); e.preventDefault(); break;
+      case 'ArrowDown':  rcsImpulse(0,-0.05,0); e.preventDefault(); break;
+      case 'ArrowLeft':  rcsImpulse(-0.05,0,0); e.preventDefault(); break;
+      case 'ArrowRight': rcsImpulse( 0.05,0,0); e.preventDefault(); break;
+      case 'KeyW':       rcsImpulse(0,0,-0.06); break;
+      case 'KeyS':       rcsImpulse(0,0, 0.06); break;
+    }
+  });
+  // device tilt on mobile (optional, additive)
+  if(m==='mobile' && window.DeviceOrientationEvent){
+    window.addEventListener('deviceorientation',e=>{
+      if(e.beta==null) return; /* subtle additive tilt could go here */ },true);
+  }
+}
+
+function setupVR(){
+  document.body.appendChild(THREE.VRButton.createButton(renderer));
+  for(let i=0;i<2;i++){
+    const c=renderer.xr.getController(i);
+    c.addEventListener('selectstart',()=>{ ensureAudio(); onVRSelect(c); });
+    rig.add(c); controllers.push(c);
+    const geo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0),new THREE.Vector3(0,0,-5)]);
+    const line=new THREE.Line(geo,new THREE.LineBasicMaterial({color:0x3da9fc}));
+    c.add(line); controllerRays.push(line);
+  }
+  document.getElementById('crosshair').style.display='none';
+}
+
+function onVRSelect(controller){
+  const tmp=new THREE.Matrix4(); tmp.identity().extractRotation(controller.matrixWorld);
+  const origin=new THREE.Vector3().setFromMatrixPosition(controller.matrixWorld);
+  const dir=new THREE.Vector3(0,0,-1).applyMatrix4(tmp).normalize();
+  raycaster.set(origin,dir);
+  const hit=pickInteractive();
+  if(hit) hit.onSelect();
+}
+
+function pickInteractive(){
+  const meshes=interactives.filter(i=>i.enabled).map(i=>i.mesh);
+  const hits=raycaster.intersectObjects(meshes,false);
+  if(hits.length){ const m=hits[0].object; return interactives.find(i=>i.mesh===m); }
+  return null;
+}
+
+/* ===========================================================================
+   DOCKING — 3D ISS docking port (IDA) + realistic HUD, auto & manual (RCS)
+=========================================================================== */
+function buildDockTarget(){
+  const port=new THREE.Group(); scene.add(port); port.visible=false; dock.port=port;
+  const white=new THREE.MeshStandardMaterial({color:0xdfe4ea,roughness:0.5,metalness:0.6,emissive:0x0c1016});
+  const darkM=new THREE.MeshStandardMaterial({color:0x3a4048,roughness:0.5,metalness:0.7,emissive:0x080a0d});
+  const blue =new THREE.MeshStandardMaterial({color:0x2b3550,roughness:0.6,metalness:0.4,emissive:0x0a0f1a});
+  // Docking features built on the -Z face (that face is aimed at the Dragon each frame via lookAt)
+  const ring=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.1,0.5,40,1,true),white); ring.rotation.x=Math.PI/2; port.add(ring);
+  const lip =new THREE.Mesh(new THREE.TorusGeometry(1.1,0.12,12,40),darkM); lip.position.z=-0.25; port.add(lip);
+  const inner=new THREE.Mesh(new THREE.CylinderGeometry(0.72,0.72,0.4,32,1,true),darkM); inner.rotation.x=Math.PI/2; inner.position.z=-0.15; port.add(inner);
+  const back=new THREE.Mesh(new THREE.CircleGeometry(0.72,32),blue); back.position.z=-0.36; back.rotation.y=Math.PI; port.add(back);
+  for(let i=0;i<4;i++){ const a=i/4*Math.PI*2; const p=new THREE.Mesh(new THREE.BoxGeometry(0.55,0.09,0.42),white);
+    p.position.set(Math.cos(a)*0.72,Math.sin(a)*0.72,-0.14); p.rotation.z=a; port.add(p); }        // soft-capture petals
+  const cmat=new THREE.MeshBasicMaterial({color:0x0d141c});
+  const cx1=new THREE.Mesh(new THREE.BoxGeometry(0.95,0.05,0.01),cmat); cx1.position.z=-0.365; port.add(cx1);
+  const cx2=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.95,0.01),cmat); cx2.position.z=-0.365; port.add(cx2);
+  const dot=new THREE.Mesh(new THREE.CircleGeometry(0.06,16),new THREE.MeshBasicMaterial({color:0xff4136})); dot.position.z=-0.371; dot.rotation.y=Math.PI; port.add(dot);
+  // nose docking camera looking forward (+Y)
+  dock.cam=new THREE.PerspectiveCamera(50,512/330,0.05,3000);
+  dock.cam.up.set(0,0,-1); dock.cam.position.set(0,3.05,0); dock.cam.lookAt(0,9,0); scene.add(dock.cam);
+}
+
+function rcsImpulse(ax,ay,az){ if(!dock.on||dock.mode!=='manual'||dock.docked||dock.failed) return;
+  dock.vx+=ax; dock.vy+=ay; dock.vz+=az; beep(520,0.03); }
+
+function updateDock(dt){
+  if(!dock.on) return;
+  dock.t+=dt;
+  if(!dock.docked && !dock.failed){
+    if(dock.mode==='auto'){
+      const vzCmd=-Math.min(1.5, Math.max(0.05, dock.z*0.025));
+      dock.vz += (vzCmd-dock.vz)*Math.min(1,dt*0.9);
+      dock.vx += (-dock.x*0.06 - dock.vx)*Math.min(1,dt*1.1);
+      dock.vy += (-dock.y*0.06 - dock.vy)*Math.min(1,dt*1.1);
+      dock.roll += (0-dock.roll)*Math.min(1,dt*0.6);
+    } else {
+      dock.vx*=(1-Math.min(1,dt*0.05)); dock.vy*=(1-Math.min(1,dt*0.05));   // pure drift + button/key impulses
+    }
+    dock.x+=dock.vx*dt; dock.y+=dock.vy*dt; dock.z+=dock.vz*dt;
+    if(dock.z>240){ dock.z=240; dock.vz=Math.min(dock.vz,0); }
+    if(dock.z<=0.12){
+      dock.z=0; const lat=Math.hypot(dock.x,dock.y), rate=Math.abs(dock.vz);
+      if(lat<0.30 && rate<0.20 && Math.abs(dock.roll)<6){ dock.docked=true; thump(); }
+      else { dock.failed=true; beep(200,0.3); }
+      dock.vx=dock.vy=dock.vz=0;
+    }
+  }
+  if(dock.port){
+    dock.port.position.set(dock.x, DOCK_NOSE_Y + DOCK_PORT_OFF + dock.z, -dock.y);
+    dock.port.lookAt(0, DOCK_NOSE_Y, 0);
+    dock.port.rotateZ(dock.roll*Math.PI/180);
+  }
+}
+
+function drawDockHUD(ctx){
+  const W=ctx.canvas.width,H=ctx.canvas.height; ctx.clearRect(0,0,W,H);
+  const cx=W/2, cy=H/2, green='#39d98a', amber='#ffcf6b', red='#ff5b4a', blue='#3da9fc';
+  ctx.textBaseline='alphabetic';
+  // approach corridor + fixed axis cross
+  ctx.strokeStyle='rgba(57,217,138,0.45)'; ctx.lineWidth=2; ctx.strokeRect(cx-92,cy-92,184,184);
+  ctx.strokeStyle=green; ctx.lineWidth=2; ctx.beginPath();
+  ctx.moveTo(cx-28,cy); ctx.lineTo(cx-9,cy); ctx.moveTo(cx+9,cy); ctx.lineTo(cx+28,cy);
+  ctx.moveTo(cx,cy-28); ctx.lineTo(cx,cy-9); ctx.moveTo(cx,cy+9); ctx.lineTo(cx,cy+28); ctx.stroke();
+  // target marker (port line-of-sight)
+  const k=1500/Math.max(dock.z,1.5);
+  const mx=cx+Math.max(-150,Math.min(150,dock.x*k)), my=cy-Math.max(-150,Math.min(150,dock.y*k));
+  const aligned=Math.hypot(dock.x,dock.y)<0.3;
+  ctx.strokeStyle=aligned?green:amber; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(mx,my,16,0,6.2832); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(mx-24,my); ctx.lineTo(mx+24,my); ctx.moveTo(mx,my-24); ctx.lineTo(mx,my+24); ctx.stroke();
+  // headers
+  ctx.font='bold 18px Menlo,monospace'; ctx.textAlign='left'; ctx.fillStyle=blue; ctx.fillText('DOCKING · IDA', 14, 26);
+  // AUTO/MANUAL button (top-right)
+  const bx=W-146, by=10, bw=132, bh=34, man=dock.mode==='manual';
+  ctx.fillStyle=man?amber:green; ctx.globalAlpha=0.18; ctx.fillRect(bx,by,bw,bh); ctx.globalAlpha=1;
+  ctx.strokeStyle=man?amber:green; ctx.lineWidth=2; ctx.strokeRect(bx,by,bw,bh);
+  ctx.fillStyle=man?amber:green; ctx.font='bold 17px Menlo,monospace'; ctx.textAlign='center';
+  ctx.fillText(man?'MANUAL ▸':'AUTO ▸', bx+bw/2, by+23);
+  // telemetry
+  ctx.textAlign='left'; ctx.font='15px Menlo,monospace'; ctx.fillStyle='#cfe0f2';
+  ctx.fillText('RANGE  '+dock.z.toFixed(1)+' m', 14, H-70);
+  ctx.fillText('RATE   '+(-dock.vz>=0?'+':'')+(-dock.vz).toFixed(2)+' m/s', 14, H-50);
+  ctx.fillText('X '+dock.x.toFixed(2)+'   Y '+dock.y.toFixed(2)+' m', 14, H-30);
+  ctx.textAlign='right'; ctx.fillStyle=Math.abs(dock.roll)<6?green:amber; ctx.fillText('ROLL '+dock.roll.toFixed(1)+'°', W-14, H-30);
+  // status
+  ctx.textAlign='center'; ctx.font='bold 20px Menlo,monospace';
+  if(dock.docked){ ctx.fillStyle=green; ctx.fillText('● CAPTURE — DOCKED', cx, cy+118); }
+  else if(dock.failed){ ctx.fillStyle=red; ctx.fillText('✕ MISS — flip switch to retry', cx, cy+118); }
+  else { ctx.fillStyle=green; ctx.fillText(dock.z<12?'STATION KEEPING':'APPROACH', cx, cy+118); }
+  // manual RCS pads
+  if(man && !dock.docked && !dock.failed){
+    const pad=(px,py,lbl)=>{ ctx.strokeStyle=blue; ctx.lineWidth=2; ctx.globalAlpha=0.9; ctx.strokeRect(px-19,py-15,38,30);
+      ctx.fillStyle=blue; ctx.font='bold 16px Menlo,monospace'; ctx.textAlign='center'; ctx.fillText(lbl,px,py+6); ctx.globalAlpha=1; };
+    const rx=W-70, ry=H-96;                     // lateral pad (right)
+    pad(rx,ry-30,'▲'); pad(rx,ry+30,'▼'); pad(rx-38,ry,'◀'); pad(rx+38,ry,'▶');
+    const fx=70, fy=H-96;                         // fwd/back (left)
+    pad(fx,fy-18,'＋'); pad(fx,fy+18,'－');
+    ctx.fillStyle='#7c8aa0'; ctx.font='11px Menlo,monospace'; ctx.textAlign='center';
+    ctx.fillText('CLOSE/BACK',fx,fy-38); ctx.fillText('TRANSLATE',rx,ry-52);
+  }
+  dock.otex.needsUpdate=true;
+}
+
+function paintDockSwitch(){
+  const c=dock.swCtx; if(!c) return; const W=200,H=120;
+  c.fillStyle='#0b1a2b'; c.fillRect(0,0,W,H); c.strokeStyle='#1d3a55'; c.lineWidth=4; c.strokeRect(4,4,W-8,H-8);
+  c.font='12px monospace'; c.textAlign='center'; c.fillStyle='#5a7088'; c.fillText('DISPLAY MODE',W/2,24);
+  const on=dock.on;
+  // NAV half
+  c.fillStyle=!on?'#3da9fc':'#0e2233'; c.fillRect(16,40,80,60); c.fillStyle=!on?'#04121f':'#7f93a8';
+  c.font='bold 20px monospace'; c.fillText('NAV',56,78);
+  // DOCK half
+  c.fillStyle=on?'#39d98a':'#0e2233'; c.fillRect(104,40,80,60); c.fillStyle=on?'#04121f':'#7f93a8';
+  c.fillText('DOCK',144,78);
+  dock.swTex.needsUpdate=true;
+}
+
+function setDockControlsEnabled(){
+  const man = dock.on && dock.mode==='manual';
+  if(dock.ctlMode) dock.ctlMode.enabled = dock.on;
+  dock.rcsBtns.forEach(b=>b.enabled=man);
+}
+
+function toggleDock(){
+  dock.on=!dock.on;
+  if(dock.on){
+    Object.assign(dock, DOCK_START); dock.on=true; dock.docked=false; dock.failed=false; dock.t=0;
+    centerMode='dock';
+    if(dock.port) dock.port.visible=true;
+    screens[1].mesh.material.map = exterior.topRT.texture;
+    if(exterior.camLabel) exterior.camLabel.visible=false;
+    beep(660,0.08);
+  } else {
+    centerMode='nav';
+    if(dock.port) dock.port.visible=false;
+    screens[1].mesh.material.map = screens[1].tex;
+    beep(440,0.08);
+  }
+  screens[1].mesh.material.needsUpdate=true;
+  setDockControlsEnabled(); paintDockSwitch(); drawCamPanel();
+}
+
+// A transparent hit-zone parked in front of the centre screen (for docking touch controls).
+function addCenterHit(lx,ly,w,h,onSelect,id){
+  const s=screens[1].mesh;
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}));
+  m.position.copy(s.position); m.rotation.copy(s.rotation); m.translateX(lx); m.translateY(ly); m.translateZ(0.008);
+  exterior.panelGroup.add(m);
+  const it={mesh:m,id:id||'dockctl',enabled:false,onSelect}; interactives.push(it); return it;
+}
+
+
+/* ===========================================================================
+   MAIN LOOP
+=========================================================================== */
+function loop(){
+  const dt=Math.min(clock.getDelta(),0.05);
+  for(let i=0;i<WARP;i++){
+    updateFlight(dt);
+    applyViewDynamics(dt);
+    updateChutes(dt);
+    updateHatch(dt);
+    updateGuards(dt);
+    updateStackFX(dt);
+    updateDock(dt);
+  }
+  updateHighlight();
+  drawScreens();
+  updateHud();
+  if(audio) updateEngineAudio();
+  if(centerMode==='cam' && exterior.topRT && exterior.cams){
+    renderer.setRenderTarget(exterior.topRT);
+    renderer.render(scene, exterior.cams[exterior.camIndex].cam);
+    renderer.setRenderTarget(null);
+  } else if(centerMode==='dock' && exterior.topRT && dock.cam){
+    renderer.setRenderTarget(exterior.topRT);
+    renderer.render(scene, dock.cam);
+    renderer.setRenderTarget(null);
+  }
+  renderer.render(scene,camera);
+}
+
+function updateHighlight(){
+  // desktop/mobile: ray from screen centre; VR uses controller at select-time
+  if(mode!=='vr'){
+    camera.rotation.set(look.pitch,look.yaw,0,'YXZ');
+    camera.updateMatrixWorld();
+    raycaster.setFromCamera({x:0,y:0},camera);
+  } else {
+    // continuous VR highlight from controller 0
+    if(controllers[0]){ const c=controllers[0];
+      const tmp=new THREE.Matrix4().extractRotation(c.matrixWorld);
+      const o=new THREE.Vector3().setFromMatrixPosition(c.matrixWorld);
+      const d=new THREE.Vector3(0,0,-1).applyMatrix4(tmp).normalize();
+      raycaster.set(o,d);
+    }
+  }
+  const hit=pickInteractive();
+  if(hit!==highlighted){
+    // clear previous screen-button glow handled in draw via highlighted ref
+    highlighted=hit;
+  }
+  // glow guarded physical buttons when highlighted
+  ['arm','abort'].forEach(id=>{ const b=exterior[id+'Btn']; if(!b) return;
+    const on = highlighted && highlighted.id===id;
+    b.btn.material.emissiveIntensity = (id==='arm'&&sysState.arm)?0.8:(on?0.9:0.15); });
+}
+
+function updateGuards(dt){
+  ['arm','abort'].forEach(id=>{ const b=exterior[id+'Btn']; if(!b) return;
+    const target=b.open?-2.2:0; // hinge rotation
+    b.hinge.rotation.x += (target-b.hinge.rotation.x)*Math.min(1,dt*10); });
+}
+
+function updateFlight(dt){
+  if(!sysState.launched && !sysState.aborted) return;
+
+  if(sysState.aborted){
+    tele.t += dt;
+    if(tele.highAbort) abortReentryStep(dt); else abortBallisticStep(dt);
+    flyView(dt, tele.accel, true);
+    updateReentryFX(dt);
+    return;
+  }
+
+  // nominal countdown + ascent
+  tele.t += dt;
+  if(tele.t < -CFG.ignition){ tele.phase='COUNTDOWN'; tele.accel=0; }
+  else if(tele.t < 0){ tele.phase='IGNITION'; tele.accel=0.05; }    // engines spinning up
+  else {
+    // ascent — altitude & velocity follow smooth profiles that reach orbital values at SECO and hold
+    if(tele.t<CFG.tMaxQ) tele.phase='POWERED ASCENT';
+    if(tele.t>=CFG.tMaxQ && tele.t<CFG.tMECO) tele.phase='THROUGH MAX-Q';
+    if(tele.t>=CFG.tMECO && tele.t<CFG.tSep) tele.phase='MECO';
+    if(tele.t>=CFG.tSep && tele.t<CFG.tOrbit) tele.phase='SECOND STAGE';
+    if(tele.t>=CFG.tOrbit){ tele.phase='ORBIT — NOMINAL'; }
+    const p=Math.min(1, tele.t/CFG.tOrbit);
+    tele.vel = CFG.orbitVel * Math.pow(p, 0.95);      // → 7660 m/s at SECO, then held
+    tele.alt = CFG.orbitAlt * (1 - Math.pow(1-p, 2));  // → 210 km at SECO, then held
+    if(tele.t<CFG.tMECO)       tele.accel = 1.2 + (tele.t/CFG.tMECO)*2.6;
+    else if(tele.t<CFG.tSep)   tele.accel = 0.1;
+    else if(tele.t<CFG.tOrbit) tele.accel = 0.8 + ((tele.t-CFG.tSep)/(CFG.tOrbit-CFG.tSep))*2.5;
+    else                       tele.accel = 0;
+    tele.fuel=Math.max(0,100 - p*100);
+    flyView(dt, tele.accel, false);
+  }
+}
+
+// Pad / low-altitude abort: SuperDraco escape arc (unchanged behaviour)
+function abortBallisticStep(dt){
+  const thrust = CFG.abortAccel * Math.max(0, 1 - tele.t/CFG.abortBurn);
+  tele.accel = thrust;
+  const acc = (thrust - 1.0) * 9.81;
+  tele.vel += acc*dt;
+  if(sysState.mains)        tele.vel += (-7  - tele.vel)*Math.min(1, dt*1.4);
+  else if(sysState.drogues) tele.vel += (-28 - tele.vel)*Math.min(1, dt*0.7);
+  tele.alt = Math.max(0, tele.alt + tele.vel*dt);
+  tele.maxAlt = Math.max(tele.maxAlt||0, tele.alt);
+  if(!sysState.drogues && tele.vel<0 && tele.t>CFG.abortBurn+0.5){ sysState.drogues=true; thump(); }
+  if(!sysState.mains && sysState.drogues && tele.alt < tele.maxAlt*0.45){ sysState.mains=true; thump(); }
+  if(!sysState.splashed && tele.alt<=0 && sysState.drogues){ sysState.splashed=true; tele.vel=0; }
+  tele.reentry=false;
+  if(sysState.splashed)      tele.phase='SPLASHDOWN — CREW SAFE';
+  else if(sysState.mains)    tele.phase='MAINS OUT — DESCENDING';
+  else if(sysState.drogues)  tele.phase='DROGUES OUT';
+  else if(tele.vel>0)        tele.phase='COAST — TOWARD APOGEE';
+  else                       tele.phase='ABORT — ESCAPE BURN';
+}
+
+// High/orbital abort: deorbit, atmospheric reentry (drag decel + plasma), altitude-gated chutes
+function abortReentryStep(dt){
+  const g=9.81, rho=Math.exp(-tele.alt/CFG.reentryScaleH);
+  tele.heat = rho*tele.vel*tele.vel;                       // dynamic-pressure / heating proxy
+  const drag = -Math.sign(tele.vel)*CFG.reentryDragK*rho*tele.vel*tele.vel;  // opposes motion → slows the fall
+  tele.vel += (-g + drag)*dt;
+  let jerk=0;                                              // chute-opening deceleration for the g read-out
+  if(sysState.mains){        const d=(-6.5-tele.vel)*Math.min(1,dt*1.4); tele.vel+=d; jerk=Math.abs(d)/dt; }
+  else if(sysState.drogues){ const d=(-45 -tele.vel)*Math.min(1,dt*0.9); tele.vel+=d; jerk=Math.abs(d)/dt; }
+  tele.alt = Math.max(0, tele.alt + tele.vel*dt);
+  tele.maxAlt = Math.max(tele.maxAlt||0, tele.alt);
+  tele.accel = Math.min(9, Math.abs(drag)/g + jerk/g);
+  // altitude-gated deploys — drogues only once we're back in the atmosphere, never in space
+  if(!sysState.drogues && tele.vel<0 && tele.alt<=CFG.drogueAlt){ sysState.drogues=true; thump(); }
+  if(!sysState.mains && sysState.drogues && tele.alt<=CFG.mainAlt){ sysState.mains=true; thump(); }
+  if(!sysState.splashed && tele.alt<=0 && sysState.drogues){ sysState.splashed=true; tele.vel=0; }
+  tele.reentry = (tele.vel<-600) && tele.alt<100000 && tele.alt>3000;   // plasma window
+  if(sysState.splashed)      tele.phase='SPLASHDOWN — CREW SAFE';
+  else if(sysState.mains)    tele.phase='MAINS OUT — DESCENDING';
+  else if(sysState.drogues)  tele.phase='DROGUES OUT';
+  else if(tele.reentry)      tele.phase='REENTRY — PLASMA';
+  else                       tele.phase='DEORBIT — FALLING';
+}
+
+const _reentryOrange = new THREE.Color(0xff5a1e);
+function buildReentryFX(){
+  const N=260, pos=new Float32Array(N*3);
+  for(let i=0;i<N;i++){ const a=Math.random()*6.2832, r=Math.random()*5.5;
+    pos[i*3]=Math.cos(a)*r; pos[i*3+1]=1+Math.random()*15; pos[i*3+2]=Math.sin(a)*r; }
+  const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  const pts=new THREE.Points(geo, new THREE.PointsMaterial({color:0xff8a3c,size:0.4,transparent:true,
+    opacity:0, blending:THREE.AdditiveBlending, depthWrite:false, fog:false}));
+  pts.renderOrder=3; scene.add(pts);
+  exterior.reentryPts=pts; exterior.reentryGlowV=0;
+}
+// Plasma: orange sky through the windows, streaking flames up the CAM, orange cabin glow (driven in applyViewDynamics)
+function updateReentryFX(dt){
+  const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+  const glowT = tele.reentry ? clamp((tele.heat-CFG.reentryHeatOn)/CFG.reentryHeatRange,0,1) : 0;
+  exterior.reentryGlowV += (glowT-(exterior.reentryGlowV||0))*Math.min(1,dt*4);
+  const gi=exterior.reentryGlowV;
+  const flick=0.7+0.3*Math.sin(tele.t*38)+0.08*Math.sin(tele.t*13);
+  if(exterior.sky) exterior.sky.material.color.lerp(_reentryOrange, clamp(gi*flick,0,1)*0.92);
+  if(exterior.reentryPts){
+    exterior.reentryPts.material.opacity = clamp(gi*1.1,0,1);
+    if(gi>0.02){ const p=exterior.reentryPts.geometry.attributes.position, arr=p.array;
+      const sp=dt*(8+Math.min(1,Math.abs(tele.vel)/1600)*42);
+      for(let i=1;i<arr.length;i+=3){ arr[i]+=sp; if(arr[i]>16) arr[i]-=15; } p.needsUpdate=true; }
+  }
+}
+
+
+// Move sky/tower to fake climb + reveal stars (vibration & tilt handled in applyViewDynamics)
+function flyView(dt, accel, abort){
+  exterior.skyShift += tele.vel*dt;
+  if(exterior.tower) exterior.tower.position.y = -tele.alt*0.02;
+  if(exterior.ground) exterior.ground.position.y = -40 - tele.alt*0.02;
+  // sky darkens toward space with altitude
+  const f=Math.min(1, tele.alt/120000);
+  exterior.sky.material.color.setRGB(0.43*(1-f), 0.69*(1-f), 0.93*(1-f));
+  if(exterior.stars){
+    exterior.stars.material.opacity = Math.min(1, Math.max(0,(tele.alt-8000)/40000));
+    exterior.stars.rotation.y += dt*0.02;
+  }
+}
+
+// Vibration, pitch-over, roll, and abort tumble/parachute sway.
+// Interior stays fixed (we're inside it); the exterior WORLD rotates so motion shows through the windows.
+function applyViewDynamics(dt){
+  const w=exterior.world;
+  if(!sysState.launched && !sysState.aborted){
+    rig.position.set(SEATX,0,0);
+    if(w){ w.rotation.x+=(0-w.rotation.x)*Math.min(1,dt*3); w.rotation.z+=(0-w.rotation.z)*Math.min(1,dt*3); }
+    if(exterior.cabinLight) exterior.cabinLight.intensity=0.6;
+    return;
+  }
+  let shake=0, txr=0, tzr=0; const t=tele.t;
+  if(sysState.aborted){
+    if(t<3){ shake=0.013*(1-t/3); tzr=0.7*Math.min(1,t/1.2); txr=Math.sin(t*7)*0.12*(1-t/3); }      // hard roll-off the pad
+    else if(t<8){ shake=0.002; tzr=0.7*Math.max(0,(8-t)/5); txr=Math.sin(t*3)*0.05; }                 // coast / drogues
+    else { const damp=t>14?Math.max(0,1-(t-14)*0.5):1;                                                 // under chutes — gentle sway
+           txr=Math.sin(t*1.6)*0.14*damp; tzr=Math.sin(t*1.15)*0.10*damp; }
+  } else {
+    if(t>-CFG.ignition && t<0){ shake=0.004; }                                                          // ignition rumble on the pad
+    else if(t>=0){
+      shake = t<CFG.tMECO ? 0.006*Math.min(1,(t+2)/8)*(t<CFG.tMaxQ?1:0.6) : 0;                          // ascent vibration, eases after Max-Q
+      txr   = -0.20*Math.min(1, t/CFG.tMECO);                                                           // pitch downrange
+      tzr   = Math.sin(t*0.25)*0.06;                                                                    // slow roll program
+    }
+  }
+  if(w){ w.rotation.x += (txr-w.rotation.x)*Math.min(1,dt*2.5);
+         w.rotation.z += (tzr-w.rotation.z)*Math.min(1,dt*2.5); }
+  rig.position.set(SEATX+(Math.random()-0.5)*shake, (Math.random()-0.5)*shake, (Math.random()-0.5)*shake*0.6);
+  if(exterior.cabinLight){
+    const burning=(!sysState.aborted && t>-CFG.ignition && t<CFG.tMECO) || (sysState.aborted && !tele.highAbort && t<3);
+    const gi=exterior.reentryGlowV||0;
+    exterior.cabinLight.intensity=0.6+(burning?Math.random()*0.5:0)+gi*1.7;
+    exterior.cabinLight.color.setRGB(1, 1-0.45*gi, 1-0.82*gi);   // glows orange during plasma
+  }
+}
+
+function updateHud(){
+  hud.tele.innerHTML='';
+  const add=(k,v)=>{ const s=document.createElement('span'); s.innerHTML=k+' <b>'+v+'</b>'; hud.tele.appendChild(s); };
+  const tt=tele.t, sign=tt<0?'-':'+', a=Math.abs(tt);
+  add('T', (isFinite(tt)? sign+String(Math.floor(a/60)).padStart(2,'0')+':'+String(Math.floor(a%60)).padStart(2,'0'):'--:--'));
+  add('ALT', (tele.alt/1000).toFixed(1)+' km');
+  add('VEL', tele.vel.toFixed(0)+' m/s');
+  add('G', tele.accel.toFixed(2));
+  add('PHASE', tele.phase);
+  // apply look (desktop/mobile)
+  if(mode!=='vr'){ camera.rotation.set(look.pitch,look.yaw,0,'YXZ'); }
+}
+
+/* ===========================================================================
+   AUDIO (procedural Web Audio — no external files)
+=========================================================================== */
+function ensureAudio(){ if(audio) return; try{
+  const AC=window.AudioContext||window.webkitAudioContext; const ctx=new AC();
+  const master=ctx.createGain(); master.gain.value=CFG.master; master.connect(ctx.destination);
+  audio={ctx,master,engine:null};
+}catch(e){ audio=null; } }
+function beep(f,d){ if(!audio) return; const{ctx,master}=audio;
+  const o=ctx.createOscillator(),g=ctx.createGain(); o.type='square'; o.frequency.value=f;
+  g.gain.value=0.0001; o.connect(g); g.connect(master); const t=ctx.currentTime;
+  g.gain.exponentialRampToValueAtTime(0.18,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+  o.start(t); o.stop(t+d+0.02); }
+function hiss(){ if(!audio) return; const{ctx,master}=audio;
+  const b=ctx.createBuffer(1,ctx.sampleRate*0.6,ctx.sampleRate); const d=b.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,2);
+  const s=ctx.createBufferSource(); s.buffer=b; const f=ctx.createBiquadFilter(); f.type='highpass'; f.frequency.value=1200;
+  const g=ctx.createGain(); g.gain.value=0.12; s.connect(f); f.connect(g); g.connect(master); s.start(); }
+function clunk(){ if(!audio) return; const{ctx,master}=audio;
+  const o=ctx.createOscillator(),g=ctx.createGain(); o.type='triangle'; o.frequency.value=120;
+  g.gain.value=0.3; o.connect(g); g.connect(master); const t=ctx.currentTime;
+  o.frequency.exponentialRampToValueAtTime(50,t+0.15); g.gain.exponentialRampToValueAtTime(0.001,t+0.2);
+  o.start(t); o.stop(t+0.22); }
+function thump(){ if(!audio) return; const{ctx,master}=audio;
+  const b=ctx.createBuffer(1,ctx.sampleRate*0.4,ctx.sampleRate); const d=b.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,1.5);
+  const s=ctx.createBufferSource(); s.buffer=b; const f=ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=300;
+  const g=ctx.createGain(); g.gain.value=0.22; s.connect(f); f.connect(g); g.connect(master); s.start(); }
+function klaxon(){ if(!audio) return; const{ctx,master}=audio;
+  for(let i=0;i<4;i++){ const o=ctx.createOscillator(),g=ctx.createGain(); o.type='sawtooth';
+    o.frequency.value=440; const t=ctx.currentTime+i*0.3; g.gain.value=0.0001; o.connect(g); g.connect(master);
+    g.gain.exponentialRampToValueAtTime(0.22,t+0.05); o.frequency.linearRampToValueAtTime(660,t+0.15);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.25); o.start(t); o.stop(t+0.27); } }
+function superDracoRumble(){ startEngine(0.5); }
+function startEngine(level){ if(!audio||audio.engine) return; const{ctx,master}=audio;
+  const b=ctx.createBuffer(1,ctx.sampleRate*2,ctx.sampleRate); const d=b.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  const s=ctx.createBufferSource(); s.buffer=b; s.loop=true;
+  const f=ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=220;
+  const g=ctx.createGain(); g.gain.value=0.0001; s.connect(f); f.connect(g); g.connect(master);
+  s.start(); audio.engine={s,g,f}; audio.engine.g.gain.linearRampToValueAtTime(level,ctx.currentTime+0.4); }
+function updateEngineAudio(){ if(!audio) return;
+  const burning = (sysState.launched && tele.t>-CFG.ignition && tele.t<CFG.tOrbit && !sysState.aborted)
+               || (sysState.aborted && tele.t<6);
+  if(burning && !audio.engine) startEngine(0.0);
+  if(audio.engine){ const target = burning ? Math.min(0.5, 0.15+tele.accel*0.04) : 0.0;
+    audio.engine.g.gain.value += (target-audio.engine.g.gain.value)*0.05;
+    audio.engine.f.frequency.value = 160 + tele.accel*30; }
+}
+</script>
+</body>
+</html>

@@ -28,6 +28,7 @@
     --ab-accent:  #b388ff;
     --cr-accent:  #e8803a;
     --gs-accent:  #d3dae6;
+    --cd-accent:  #a9dcff;
   }
 
   *{ box-sizing: border-box; }
@@ -285,6 +286,7 @@
   .cabinet.ab{  --accent: var(--ab-accent); }
   .cabinet.cr{  --accent: var(--cr-accent); }
   .cabinet.gs{  --accent: var(--gs-accent); }
+  .cabinet.cd{  --accent: var(--cd-accent); }
 
   /* ---------- Footer ---------- */
   footer{
@@ -1081,10 +1083,123 @@
         <div class="play"><span>Launch the Probe</span><span class="arrow">▶</span></div>
       </a>
 
+      <!-- ============ CREW DRAGON ============ -->
+      <a class="cabinet cd" href="CD-1.html" aria-label="Play Crew Dragon">
+        <div class="screen">
+          <span class="badge">VR READY</span>
+          <svg viewBox="0 0 400 250" role="img" aria-label="A Falcon 9 rocket ascending on a plume of flame through the atmosphere into space">
+            <defs>
+              <linearGradient id="cdSky" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#04060f"/>
+                <stop offset="38%" stop-color="#12356e"/>
+                <stop offset="72%" stop-color="#3f7fc0"/>
+                <stop offset="100%" stop-color="#9cc4e6"/>
+              </linearGradient>
+              <linearGradient id="cdBody" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#ffffff"/>
+                <stop offset="55%" stop-color="#eef2f8"/>
+                <stop offset="100%" stop-color="#b9c3d2"/>
+              </linearGradient>
+              <linearGradient id="cdFlame" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#a9dcff"/>
+                <stop offset="25%" stop-color="#ffffff"/>
+                <stop offset="55%" stop-color="#ffd24d"/>
+                <stop offset="100%" stop-color="#ff7a2f"/>
+              </linearGradient>
+              <radialGradient id="cdSmoke" cx="50%" cy="40%" r="60%">
+                <stop offset="0%" stop-color="#e6ebf2"/>
+                <stop offset="100%" stop-color="#8b93a1"/>
+              </radialGradient>
+            </defs>
+
+            <rect width="400" height="250" fill="url(#cdSky)"/>
+
+            <!-- stars in the upper dark -->
+            <g fill="#ffffff">
+              <circle cx="44" cy="26" r="1.2" opacity="0.8"/>
+              <circle cx="120" cy="18" r="1" opacity="0.6"/>
+              <circle cx="300" cy="24" r="1.2" opacity="0.7"/>
+              <circle cx="360" cy="40" r="1" opacity="0.6"/>
+              <circle cx="250" cy="14" r="1" opacity="0.6"/>
+              <circle cx="80" cy="48" r="1" opacity="0.5"/>
+            </g>
+
+            <!-- ascent speed streaks -->
+            <g stroke="#a9dcff" stroke-width="2" stroke-linecap="round" opacity="0.4">
+              <line x1="120" y1="70" x2="128" y2="104"/>
+              <line x1="286" y1="66" x2="278" y2="100"/>
+              <line x1="150" y1="40" x2="156" y2="66"/>
+              <line x1="258" y1="44" x2="252" y2="70"/>
+            </g>
+
+            <!-- rocket, leaning into the gravity turn -->
+            <g transform="rotate(7 200 130)">
+              <!-- exhaust plume -->
+              <polygon points="185,206 215,206 226,240 200,286 174,240" fill="url(#cdFlame)"/>
+              <polygon points="191,206 209,206 215,236 200,266 185,236" fill="#ffffff" opacity="0.85"/>
+              <!-- mach diamonds -->
+              <circle cx="200" cy="224" r="2.4" fill="#a9dcff"/>
+              <circle cx="200" cy="238" r="1.8" fill="#ffffff"/>
+
+              <!-- engine skirt -->
+              <polygon points="188,200 212,200 216,208 184,208" fill="#c2ccdb" stroke="#7c8698" stroke-width="1"/>
+
+              <!-- first stage body -->
+              <rect x="190" y="66" width="20" height="136" rx="4" fill="url(#cdBody)" stroke="#aab4c4" stroke-width="1"/>
+              <!-- icy rim light -->
+              <rect x="190" y="66" width="3" height="136" rx="2" fill="#a9dcff" opacity="0.45"/>
+              <!-- interstage / stripe -->
+              <rect x="190" y="120" width="20" height="8" fill="#17171d"/>
+              <rect x="190" y="150" width="20" height="3" fill="#c2ccdb"/>
+              <!-- SpaceX text hint -->
+              <rect x="196" y="168" width="8" height="2" rx="1" fill="#9aa4b4"/>
+
+              <!-- grid fins near the top of the booster -->
+              <g fill="#8f99a8" stroke="#5f6879" stroke-width="0.8">
+                <rect x="180" y="74" width="10" height="12" rx="1" transform="rotate(-14 185 80)"/>
+                <rect x="210" y="74" width="10" height="12" rx="1" transform="rotate(14 215 80)"/>
+              </g>
+
+              <!-- Crew Dragon capsule (bullet nose) -->
+              <path d="M191,66 L191,52 Q191,36 200,32 Q209,36 209,52 L209,66 Z"
+                    fill="url(#cdBody)" stroke="#aab4c4" stroke-width="1"/>
+              <path d="M195,44 Q200,38 205,44" fill="none" stroke="#7c8698" stroke-width="1" opacity="0.6"/>
+            </g>
+
+            <!-- launch smoke billows near the base -->
+            <g opacity="0.95">
+              <ellipse cx="150" cy="236" rx="34" ry="20" fill="url(#cdSmoke)"/>
+              <ellipse cx="262" cy="240" rx="36" ry="21" fill="url(#cdSmoke)"/>
+              <ellipse cx="206" cy="248" rx="40" ry="20" fill="url(#cdSmoke)"/>
+              <ellipse cx="112" cy="246" rx="22" ry="14" fill="url(#cdSmoke)" opacity="0.85"/>
+              <ellipse cx="304" cy="248" rx="24" ry="15" fill="url(#cdSmoke)" opacity="0.85"/>
+              <!-- warm underlight -->
+              <ellipse cx="206" cy="242" rx="26" ry="10" fill="#ffb066" opacity="0.4"/>
+            </g>
+
+            <!-- faint launch tower being left behind -->
+            <g stroke="#2b3346" stroke-width="2" opacity="0.55">
+              <line x1="60" y1="250" x2="60" y2="196"/>
+              <line x1="72" y1="250" x2="72" y2="200"/>
+              <line x1="60" y1="204" x2="72" y2="212"/>
+              <line x1="60" y1="216" x2="72" y2="224"/>
+            </g>
+          </svg>
+        </div>
+        <div class="strip">
+          <h2>Crew Dragon</h2>
+        </div>
+        <div class="body">
+          <p>Strap into the commander's seat of a Crew Dragon. Run the Falcon 9 launch, work the touchscreens, and ride staging up to orbit — then handle reentry under parachutes or dock with the station. The abort handle's right there if it all goes sideways.</p>
+          <div class="meta">LAUNCH SIM · VR + BROWSER · LAUNCH → ORBIT → DOCK</div>
+        </div>
+        <div class="play"><span>Start the Countdown</span><span class="arrow">▶</span></div>
+      </a>
+
     </main>
 
     <footer>
-      <span class="pulse">▸</span> 7 games loaded · built for headsets and browsers
+      <span class="pulse">▸</span> 8 games loaded · built for headsets and browsers
     </footer>
   </div>
 </body>
