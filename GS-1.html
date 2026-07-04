@@ -242,6 +242,29 @@ const LEVELS = [
               P(13,7, 2.2, 7.0,'gas',0xd9b64c) ],
     holes:[ {x:-1,z:0,mass:14,killR:3.0} ], par:3 },
 
+  // ---- new: maelstrom — a black hole and drifting rocks split three lanes ----
+  { name:"Maelstrom",
+    anchor:{x:-18,z:0}, target:{x:18,z:0},
+    planets:[ P(-8,-7, 2.4, 9.0,'earth',0x2f6fc4),
+              P(-3,8, 2.4, 9.0,'gas',0xd9b64c),
+              P(10,-7, 2.2, 8.0,'rock',0xd9783a),
+              P(14,6, 2.0, 6.0,'ice',0x66c2d6) ],
+    holes:[ {x:2,z:1,mass:12,killR:2.6} ],
+    belts:[ {x1:-1,z1:-15,x2:2,z2:-5,w:1.3},
+            {x1:6,z1:12,x2:6,z2:12,w:1.1} ], par:3 },
+
+  // ---- new: the gauntlet — belt walls channel every launch into the planet field ----
+  { name:"The Gauntlet",
+    anchor:{x:-21,z:-10}, target:{x:19,z:10},
+    planets:[ P(-13,-3, 2.2, 8.0,'rock',0xb0503a),
+              P(-5,-9, 2.4, 9.0,'ice',0x8fd3e6),
+              P(1,3, 2.6, 10.0,'gas',0x8a5cc0),
+              P(9,-4, 2.2, 8.0,'earth',0x2f6fc4),
+              P(14,4, 2.0, 7.0,'gas',0x4a9d5f) ],
+    holes:[ {x:6,z:9,mass:12,killR:2.4} ],
+    belts:[ {x1:-25,z1:-3,x2:-13,z2:3,w:1.2},
+            {x1:-17,z1:-16,x2:-9,z2:-15,w:1.2} ], par:4 },
+
   // ---- new: serpent — six-planet zigzag corridor; best routes chain all six ----
   { name:"Serpent",
     anchor:{x:-24,z:0}, target:{x:24,z:0},
@@ -690,7 +713,11 @@ function frameCamera(L){
    VR — diorama + grab-the-orb slingshot
    ========================================================================= */
 let vrController=[];
-const _wp=new THREE.Vector3();
+const _wp=new THREE.Vector3(), _wpA=new THREE.Vector3(), _wpB=new THREE.Vector3();
+const gripHands=[];        // controllers currently gripping (world-grab)
+let worldGrab=null;        // active grab transform state
+let needRecenter=false;    // request a diorama recenter on next frame
+let prevRecenterBtn=false;
 function makeControllerVisual(){
   const g=new THREE.Group();
   g.add(new THREE.Mesh(new THREE.SphereGeometry(0.012,12,8), new THREE.MeshBasicMaterial({ color:0x7fd0ff })));
@@ -704,6 +731,10 @@ function setupVRControllers(){
     c.add(makeControllerVisual());
     c.addEventListener('selectstart', onVRSelectStart);
     c.addEventListener('selectend', onVRSelectEnd);
+    c.addEventListener('squeezestart', onSqueezeStart);
+    c.addEventListener('squeezeend', onSqueezeEnd);
+    c.addEventListener('connected', e=>{ c.userData.inputSource=e.data; });
+    c.addEventListener('disconnected', ()=>{ c.userData.inputSource=null; });
     playerDolly.add(c); vrController.push(c);
   }
 }
@@ -724,11 +755,79 @@ function updateVRGrab(){
 
 function enterDioramaMode(){
   worldGroup.scale.setScalar(CONFIG.VR_SCALE);
-  const L=LEVELS[curLevel], cx=(L.anchor.x+L.target.x)/2, cz=(L.anchor.z+L.target.z)/2;
-  worldGroup.position.set(-cx*CONFIG.VR_SCALE, CONFIG.VR_TABLE_Y, -cz*CONFIG.VR_SCALE - CONFIG.VR_FORWARD);
-  worldGroup.rotation.set(0,0,0);
+  needRecenter=true;   // position/orient on the next frame using live head pose
 }
-function exitDioramaMode(){ worldGroup.scale.setScalar(1); worldGroup.position.set(0,0,0); frameCamera(LEVELS[curLevel]); }
+function exitDioramaMode(){ worldGroup.scale.setScalar(1); worldGroup.position.set(0,0,0); worldGroup.rotation.set(0,0,0); frameCamera(LEVELS[curLevel]); }
+
+// ---- grab-the-world: one hand drags, two hands zoom (smooth) ----
+function onSqueezeStart(ev){ const c=ev.target; if (gripHands.indexOf(c)<0) gripHands.push(c); worldGrab=null; }
+function onSqueezeEnd(ev){ const i=gripHands.indexOf(ev.target); if (i>=0) gripHands.splice(i,1); worldGrab=null; }
+
+function updateWorldGrab(){
+  const n=gripHands.length;
+  if (n===0){ worldGrab=null; return; }
+  if (n===1){
+    const p=gripHands[0].getWorldPosition(_wpA);
+    if (!worldGrab || worldGrab.mode!==1){ worldGrab={mode:1, last:p.clone()}; return; }
+    _wpB.subVectors(p, worldGrab.last);
+    worldGroup.position.add(_wpB);
+    worldGrab.last.copy(p);
+  } else {
+    const c0=gripHands[0].getWorldPosition(_wpA).clone();
+    const c1=gripHands[1].getWorldPosition(_wpB).clone();
+    if (!worldGrab || worldGrab.mode!==2){
+      worldGroup.updateMatrix();
+      worldGrab={ mode:2, initMat:worldGroup.matrix.clone(),
+        mid0:c0.clone().add(c1).multiplyScalar(0.5),
+        len0:Math.max(0.0001, c0.distanceTo(c1)), initScale:worldGroup.scale.x };
+      return;
+    }
+    const mid1=c0.clone().add(c1).multiplyScalar(0.5);
+    let s=c0.distanceTo(c1)/worldGrab.len0;
+    const minS=(CONFIG.VR_SCALE*0.35)/worldGrab.initScale, maxS=(CONFIG.VR_SCALE*3.5)/worldGrab.initScale;
+    s=Math.max(minS, Math.min(maxS, s));
+    const Tm1=new THREE.Matrix4().makeTranslation(mid1.x,mid1.y,mid1.z);
+    const S=new THREE.Matrix4().makeScale(s,s,s);
+    const Tm0=new THREE.Matrix4().makeTranslation(-worldGrab.mid0.x,-worldGrab.mid0.y,-worldGrab.mid0.z);
+    const D=new THREE.Matrix4().multiplyMatrices(Tm1,S).multiply(Tm0);
+    const M=new THREE.Matrix4().multiplyMatrices(D, worldGrab.initMat);
+    M.decompose(worldGroup.position, worldGroup.quaternion, worldGroup.scale);
+  }
+}
+
+// place the slingshot a comfortable reach in front of the headset, level extending down-range
+function recenterDiorama(){
+  if (!renderer.xr.isPresenting) return;
+  camera.getWorldPosition(_wpA);
+  camera.getWorldDirection(_wpB); _wpB.y=0;
+  if (_wpB.lengthSq()<1e-5) _wpB.set(0,0,-1); _wpB.normalize();
+  const scale=CONFIG.VR_SCALE;
+  worldGroup.scale.setScalar(scale);
+  // orient so anchor -> level center points down-range (aligned with head forward)
+  const L=LEVELS[curLevel]; let cx=0,cz=0,k=0;
+  for (const p of L.planets){ cx+=p.x; cz+=p.z; k++; }
+  if (k){ cx/=k; cz/=k; } else { cx=L.target.x; cz=L.target.z; }
+  const localAngle=Math.atan2(cz-anchorPos.z, cx-anchorPos.x);
+  const headAngle=Math.atan2(_wpB.z, _wpB.x);
+  worldGroup.rotation.set(0, localAngle-headAngle, 0);
+  worldGroup.updateMatrixWorld(true);
+  // position so the anchor sits VR_FORWARD in front of the head at table height
+  const desired=_wpA.clone().addScaledVector(_wpB, CONFIG.VR_FORWARD); desired.y=CONFIG.VR_TABLE_Y;
+  const off=anchorPos.clone().multiplyScalar(scale).applyEuler(worldGroup.rotation);
+  worldGroup.position.copy(desired).sub(off);
+  worldGroup.updateMatrixWorld(true);
+}
+
+// A/X (or B/Y) button recenters
+function pollRecenter(){
+  let pressed=false;
+  for (const c of vrController){
+    const gp=c.userData.inputSource && c.userData.inputSource.gamepad;
+    if (gp && gp.buttons){ if ((gp.buttons[4]&&gp.buttons[4].pressed)||(gp.buttons[5]&&gp.buttons[5].pressed)) pressed=true; }
+  }
+  if (pressed && !prevRecenterBtn) recenterDiorama();
+  prevRecenterBtn=pressed;
+}
 
 renderer.xr.addEventListener('sessionstart', ()=>{ enterDioramaMode(); hideMessageDOM(); vrPanel.visible=true; updateVRPanel(); });
 renderer.xr.addEventListener('sessionend', ()=>{ exitDioramaMode(); vrPanel.visible=false; if (state===STATE.WON) showMessage(true); });
@@ -752,7 +851,7 @@ function updateVRPanel(){
   } else {
     g.fillStyle='#7fd0ff'; g.font='bold 34px sans-serif'; g.fillText('Level '+(curLevel+1)+' — '+LEVELS[curLevel].name,256,70);
     g.fillStyle='#eaf2ff'; g.font='26px sans-serif'; g.fillText('Attempts: '+attempts+'    Best: '+(best[curLevel]!==undefined?best[curLevel]:'—'),256,122);
-    g.fillStyle='#9fb6d8'; g.font='20px sans-serif'; g.fillText('Grab the orb • pull back • release',256,176);
+    g.fillStyle='#9fb6d8'; g.font='19px sans-serif'; g.fillText('Grab orb to throw • Grip: move • 2 hands: zoom • A/X: recenter',256,176);
   }
   vrPanelTex.needsUpdate=true;
 }
@@ -866,7 +965,13 @@ function animate(){
     targetPad.scale.setScalar(s);
     if (padFlash>0) padFlash=Math.max(0,padFlash-dt*1.5);
   }
-  if (renderer.xr.isPresenting) updateVRGrab();
+  if (renderer.xr.isPresenting){
+    if (needRecenter){ recenterDiorama(); needRecenter=false; }
+    updateWorldGrab();
+    worldGroup.updateMatrixWorld(true);
+    pollRecenter();
+    updateVRGrab();
+  }
   if (state===STATE.FLYING){ stepFlight(dt); }
   else if (state===STATE.FAIL){ failTimer-=dt; if (failTimer<=0){ resetBall(); if (renderer.xr.isPresenting) updateVRPanel(); } }
   else if (state===STATE.AIM && aiming){ updatePreview(); }
