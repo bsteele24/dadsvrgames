@@ -78,7 +78,6 @@
 </div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/webxr/VRButton.js"></script>
 <script>
 /* ============================================================================
    CREW DRAGON — PAD LAUNCH SIM   (Three.js r128 / WebXR)
@@ -207,12 +206,12 @@ function start(m){
     warpBtn.textContent = (WARP===1) ? 'Warp ×10' : 'Warp ×10 · ON';
   };
   buildWorld();
-  setupMode(m);
   setHud(CHECK[0]);
   refreshButtonStates();
   running = true;
   clock = new THREE.Clock();
-  renderer.setAnimationLoop(loop);
+  renderer.setAnimationLoop(loop);   // render BEFORE mode setup, so a VR hiccup can't leave a black screen
+  setupMode(m);
 }
 
 /* ===========================================================================
@@ -1170,16 +1169,44 @@ function setupPointer(m){
 }
 
 function setupVR(){
-  document.body.appendChild(THREE.VRButton.createButton(renderer));
-  for(let i=0;i<2;i++){
-    const c=renderer.xr.getController(i);
-    c.addEventListener('selectstart',()=>{ ensureAudio(); onVRSelect(c); });
-    rig.add(c); controllers.push(c);
-    const geo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0),new THREE.Vector3(0,0,-5)]);
-    const line=new THREE.Line(geo,new THREE.LineBasicMaterial({color:0x3da9fc}));
-    c.add(line); controllerRays.push(line);
-  }
-  document.getElementById('crosshair').style.display='none';
+  makeEnterVRButton();                          // self-contained — no reliance on the CDN examples VRButton.js
+  try{
+    for(let i=0;i<2;i++){
+      const c=renderer.xr.getController(i);
+      c.addEventListener('selectstart',()=>{ ensureAudio(); onVRSelect(c); });
+      rig.add(c); controllers.push(c);
+      const geo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0),new THREE.Vector3(0,0,-5)]);
+      const line=new THREE.Line(geo,new THREE.LineBasicMaterial({color:0x3da9fc}));
+      c.add(line); controllerRays.push(line);
+    }
+  }catch(e){ console.warn('VR controller setup skipped:', e); }
+  const ch=document.getElementById('crosshair'); if(ch) ch.style.display='none';
+}
+
+// Minimal Enter-VR button (replaces THREE.VRButton, which fails to load from the cdnjs examples path on Quest).
+function makeEnterVRButton(){
+  const btn=document.createElement('button');
+  btn.id='entervr'; btn.textContent='ENTER VR';
+  Object.assign(btn.style,{ position:'fixed', bottom:'18px', right:'18px', zIndex:'30',
+    padding:'12px 22px', border:'1px solid #3da9fc', borderRadius:'10px', background:'#0b1b2e',
+    color:'#dce9f7', font:'600 15px system-ui,sans-serif', letterSpacing:'.08em', cursor:'pointer' });
+  document.body.appendChild(btn);
+  if(!navigator.xr){ btn.textContent='VR UNAVAILABLE'; btn.disabled=true; btn.style.opacity='0.5'; return; }
+  navigator.xr.isSessionSupported('immersive-vr').then(ok=>{
+    if(!ok){ btn.textContent='VR NOT SUPPORTED'; btn.disabled=true; btn.style.opacity='0.5'; }
+  }).catch(()=>{});
+  let session=null;
+  const onEnd=()=>{ session=null; btn.textContent='ENTER VR'; };
+  btn.onclick=async()=>{
+    if(session){ session.end(); return; }
+    try{
+      const s=await navigator.xr.requestSession('immersive-vr',
+        { optionalFeatures:['local-floor','bounded-floor','hand-tracking'] });
+      session=s; btn.textContent='EXIT VR'; s.addEventListener('end', onEnd);
+      renderer.xr.setReferenceSpaceType('local-floor');
+      await renderer.xr.setSession(s);
+    }catch(err){ console.error('Enter VR failed:', err); btn.textContent='VR ERROR'; setTimeout(()=>btn.textContent='ENTER VR',1500); }
+  };
 }
 
 function onVRSelect(controller){
