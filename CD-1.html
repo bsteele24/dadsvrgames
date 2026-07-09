@@ -255,6 +255,7 @@ function buildWorld(){
   buildSeats();
   buildConsole();
   buildExterior();
+  buildEarth();
   buildChutes();
   buildBoardingArm();
   buildReentryFX();
@@ -412,20 +413,53 @@ function buildSeats(){
 
 function makeCrew(){
   const grp=new THREE.Group();
-  const suit=new THREE.MeshStandardMaterial({color:0xf4f5f7,roughness:0.6});
-  const trim=new THREE.MeshStandardMaterial({color:0x15171b,roughness:0.5});
-  const torso=new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.2,0.6,16),suit);
-  torso.position.set(0,0.95,-0.05); torso.rotation.x=0.2; grp.add(torso);
-  const helmet=new THREE.Mesh(new THREE.SphereGeometry(0.15,20,16),suit);
-  helmet.position.set(0,1.32,-0.02); grp.add(helmet);
-  const visor=new THREE.Mesh(new THREE.SphereGeometry(0.13,20,16,0.6,2.0,0.7,1.2),
-    new THREE.MeshStandardMaterial({color:0x0b0e12,roughness:0.2,metalness:0.6}));
-  visor.position.copy(helmet.position); visor.position.z+=0.02; grp.add(visor);
-  // legs
-  [[-0.09],[0.09]].forEach(s=>{
-    const leg=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.06,0.55,12),suit);
-    leg.position.set(s[0],0.55,0.18); leg.rotation.x=1.1; grp.add(leg);
+  const suit =new THREE.MeshStandardMaterial({color:0xeef1f5,roughness:0.55,metalness:0.03});
+  const black=new THREE.MeshStandardMaterial({color:0x15171b,roughness:0.5,metalness:0.15});
+  const glove=new THREE.MeshStandardMaterial({color:0x3a3f47,roughness:0.5,metalness:0.2});
+  const visorM=new THREE.MeshStandardMaterial({color:0x0a0d12,roughness:0.12,metalness:0.7});
+  const V=(x,y,z)=>new THREE.Vector3(x,y,z);
+  // a tapered bone that spans exactly from joint a to joint b (guarantees the segments connect)
+  function bone(a,b,rA,rB,mat){
+    const dir=new THREE.Vector3().subVectors(b,a), len=dir.length();
+    const m=new THREE.Mesh(new THREE.CylinderGeometry(rB,rA,len,14), mat);
+    m.position.copy(a).add(b).multiplyScalar(0.5);
+    m.quaternion.setFromUnitVectors(V(0,1,0), dir.normalize()); grp.add(m); return m;
+  }
+  const joint=(p,r,mat)=>{ const s=new THREE.Mesh(new THREE.SphereGeometry(r,12,10),mat); s.position.copy(p); grp.add(s); };
+
+  // joint positions (seated; +z is forward toward the lap)
+  const pelvis=V(0,0.66,0.00), chest=V(0,1.10,-0.05), headC=V(0,1.29,-0.02);
+  const shL=V(-0.155,1.06,-0.03), shR=V(0.155,1.06,-0.03);
+  const elL=V(-0.19,0.88,0.12),   elR=V(0.19,0.88,0.12);
+  const wrL=V(-0.145,0.76,0.28),  wrR=V(0.145,0.76,0.28);
+  const hipL=V(-0.095,0.66,0.02), hipR=V(0.095,0.66,0.02);
+  const knL=V(-0.10,0.60,0.30),   knR=V(0.10,0.60,0.30);
+  const anL=V(-0.10,0.45,0.46),   anR=V(0.10,0.45,0.46);
+
+  // torso (a real bone hips→shoulders) + hip block + black shoulder yoke
+  bone(pelvis, chest, 0.20, 0.15, suit);
+  joint(pelvis,0.16,suit); joint(chest,0.18,black);
+  // arms: shoulder → black upper → elbow → white forearm → glove
+  [[shL,elL,wrL],[shR,elR,wrR]].forEach(([S,E,W])=>{
+    joint(S,0.072,black); bone(S,E,0.055,0.048,black);
+    joint(E,0.046,black); bone(E,W,0.048,0.045,suit);
+    joint(W,0.05,glove);
   });
+  // legs: hip → white thigh → black knee → white shin → black boot
+  [[hipL,knL,anL],[hipR,knR,anR]].forEach(([H,K,A])=>{
+    joint(H,0.075,suit); bone(H,K,0.078,0.07,suit);
+    joint(K,0.06,black); bone(K,A,0.065,0.058,suit);
+    const boot=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.09,0.19),black);
+    boot.position.set(A.x, A.y-0.02, A.z+0.08); grp.add(boot);
+  });
+  // classic SpaceX helmet — elongated white shell + wide wraparound glossy visor
+  joint(V(0,1.16,-0.04),0.07,black);                                       // neck ring
+  const headG=new THREE.Group(); headG.position.copy(headC); headG.scale.set(1.0,1.06,1.12); headG.rotation.x=Math.PI/180*20; grp.add(headG);
+  headG.add(new THREE.Mesh(new THREE.SphereGeometry(0.13,28,22),suit));    // white shell
+  const visor=new THREE.Mesh(new THREE.SphereGeometry(0.132,32,24, 0.57,2.0, 0.48,1.18), visorM);
+  headG.add(visor);                                                        // wide dark wraparound visor
+  const band=new THREE.Mesh(new THREE.CylinderGeometry(0.10,0.115,0.06,20),black);
+  band.position.set(headC.x,headC.y-0.09,headC.z+0.015); grp.add(band);    // chin / lower shell
   return grp;
 }
 
@@ -477,6 +511,8 @@ function buildConsole(){
   buildGuardedButton(group,'arm', -0.32, 0x39d98a, 'ARM');
   // Physical ABORT button + red flip guard (always available once armed)
   buildGuardedButton(group,'abort', 0.32, 0xff3b30, 'ABORT');
+  // Physical UNDOCK toggle switch — clear spring cover over a bat handle, caution-striped base (live once captured)
+  buildUndockSwitch(group, -0.54);
   // Camera-select TOUCHSCREEN on the manual panel (replaces the old DISPLAY/CAMERA push-buttons):
   // NAV on top, then one button per mounted camera. Tapping switches the centre screen source.
   const cpY = 1.42-CFG.screenH/2-CFG.consoleDrop;
@@ -521,9 +557,14 @@ function buildConsole(){
     face.position.z=0.021; g.add(face);
     const hit=new THREE.Mesh(new THREE.PlaneGeometry(0.24,0.16), new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}));
     hit.position.z=0.05; g.add(hit);
+    // red "locked" haze — shown, and hit-zone disabled, until the capsule is in orbit
+    const haze=new THREE.Mesh(new THREE.PlaneGeometry(0.24,0.15),
+      new THREE.MeshBasicMaterial({color:0xff2a1a, transparent:true, opacity:0.34, depthWrite:false, blending:THREE.AdditiveBlending}));
+    haze.position.z=0.03; g.add(haze); exterior.dockLock=haze;
     g.position.set(0.54, 1.42-CFG.screenH/2-CFG.consoleDrop, -CFG.screenDist+0.20);
     g.rotation.x=CFG.screenTilt-0.5; group.add(g);
-    interactives.push({ mesh:hit, id:'dockToggle', enabled:true, onSelect:toggleDock });
+    const dtInt={ mesh:hit, id:'dockToggle', enabled:true, onSelect:toggleDock };
+    interactives.push(dtInt); exterior.dockToggleInt=dtInt;
     paintDockSwitch();
   }
   // On-screen docking controls over the centre screen (enabled only in DOCK mode)
@@ -629,7 +670,7 @@ function buildGuardedButton(group,id,localX,color,label){
   btn.rotation.x=Math.PI/2; btn.position.z=0.03; g.add(btn);
   // flip guard
   const lid=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.10,0.012),
-    new THREE.MeshStandardMaterial({color:id==='abort'?0x5a0d09:0x0c2a1c,roughness:0.5,metalness:0.2,
+    new THREE.MeshStandardMaterial({color:id==='abort'?0x5a0d09:(id==='undock'?0x3a2606:0x0c2a1c),roughness:0.5,metalness:0.2,
       transparent:true,opacity:0.85}));
   const hinge=new THREE.Group(); hinge.position.set(0,0.05,0.045); hinge.add(lid); lid.position.y=-0.05;
   g.add(hinge);
@@ -644,6 +685,49 @@ function buildGuardedButton(group,id,localX,color,label){
   exterior[id+'Btn']={group:g, btn, hinge, color, open:false, label};
   interactives.push({ mesh:lid, id:id+'_guard', enabled:true, onSelect:()=>toggleGuard(id) });
   interactives.push({ mesh:hit, id, enabled:false, onSelect:()=>handleSelect(id) });
+}
+
+// Yellow/white diagonal hazard border (transparent centre) for framing the switch panel
+function makeCautionFrameTex(){
+  const cv=document.createElement('canvas'); cv.width=320; cv.height=200; const c=cv.getContext('2d');
+  const bw=24;                                              // border thickness (px)
+  c.beginPath(); c.rect(0,0,320,200); c.rect(bw,bw,320-2*bw,200-2*bw); c.clip('evenodd');
+  c.fillStyle='#f4f6f8'; c.fillRect(0,0,320,200);
+  c.strokeStyle='#f2c200'; c.lineWidth=15;
+  for(let i=-240;i<460;i+=34){ c.beginPath(); c.moveTo(i,0); c.lineTo(i+200,200); c.stroke(); }
+  const t=new THREE.CanvasTexture(cv); t.minFilter=THREE.LinearFilter; t.generateMipmaps=false; return t;
+}
+// Missile-style toggle switch: real bat handle, clear spring cover, hazard-striped base (UNDOCK)
+function buildUndockSwitch(group, localX){
+  const g=new THREE.Group();
+  const metalDark=new THREE.MeshStandardMaterial({color:0x141619,roughness:0.5,metalness:0.45});
+  const steel=new THREE.MeshStandardMaterial({color:0xced3da,roughness:0.3,metalness:0.9});
+  const hexM =new THREE.MeshStandardMaterial({color:0x8f959d,roughness:0.35,metalness:0.85});
+  const clear=new THREE.MeshStandardMaterial({color:0xbfe0ff,roughness:0.08,metalness:0.0,transparent:true,opacity:0.24,side:THREE.DoubleSide});
+  g.add(new THREE.Mesh(new THREE.BoxGeometry(0.16,0.10,0.04), metalDark));                 // mounting bracket
+  // thin hazard border framing the panel — single plane, clear of the bracket (no z-fighting / mipmap wash)
+  const frame=new THREE.Mesh(new THREE.PlaneGeometry(0.164,0.104),
+    new THREE.MeshBasicMaterial({map:makeCautionFrameTex(), transparent:true}));
+  frame.position.z=0.024; g.add(frame);
+  // hex nut with the bat handle + ball tip mounted on top of it
+  const nut=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.022,0.018,6), hexM);
+  nut.rotation.x=Math.PI/2; nut.position.z=0.03; g.add(nut);
+  const lever=new THREE.Group(); lever.position.set(0,0,0.039); g.add(lever);              // seated on the hex-nut top
+  const bat=new THREE.Mesh(new THREE.CylinderGeometry(0.008,0.011,0.06,16), steel); bat.position.y=0.03; lever.add(bat);
+  const tip=new THREE.Mesh(new THREE.SphereGeometry(0.013,16,12), steel); tip.position.y=0.062; lever.add(tip);
+  lever.rotation.x=Math.PI/2 - 0.5;                                                         // tilted toggle
+  const hinge=new THREE.Group(); hinge.position.set(0,0.05,0.05); g.add(hinge);            // clear flip cover on a back hinge
+  const top=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.095,0.008), clear); top.position.set(0,-0.045,0.045); hinge.add(top);
+  const lip=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.008,0.05), clear); lip.position.set(0,-0.09,0.017); hinge.add(lip);
+  [-0.058,0.058].forEach(sx=>{ const s=new THREE.Mesh(new THREE.BoxGeometry(0.008,0.095,0.05), clear); s.position.set(sx,-0.045,0.017); hinge.add(s); });
+  const knuck=new THREE.Mesh(new THREE.CylinderGeometry(0.01,0.01,0.13,12), hexM); knuck.rotation.z=Math.PI/2; hinge.add(knuck);
+  g.position.set(localX, 1.42-CFG.screenH/2-CFG.consoleDrop, -CFG.screenDist+0.20);
+  g.rotation.x=CFG.screenTilt-0.5; group.add(g);
+  const hit=new THREE.Mesh(new THREE.PlaneGeometry(0.15,0.13), new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}));
+  hit.position.set(0,0,0.06); g.add(hit);
+  exterior.undockBtn={ group:g, btn:lever, hinge, color:0xff8c42, open:false, label:'UNDOCK' };
+  interactives.push({ mesh:top, id:'undock_guard', enabled:true, onSelect:()=>toggleGuard('undock') });
+  interactives.push({ mesh:hit, id:'undock',       enabled:false, onSelect:()=>handleSelect('undock') });
 }
 
 function toggleGuard(id){
@@ -1071,11 +1155,13 @@ function refreshButtonStates(){
   if(armGuard) armGuard.enabled = atArm && !exterior.armBtn.open && !sysState.arm;
   const abGuard=interactives.find(i=>i.id==='abort_guard');
   if(abGuard) abGuard.enabled = sysState.arm && !exterior.abortBtn.open && !sysState.aborted;
+  updateUndockGuard();
   drawScreens();
 }
 
 function handleSelect(id){
   if(id==='abort'){ doAbort(); return; }
+  if(id==='undock'){ undock(); return; }
   switch(id){
     case 'power':  sysState.power=true; beep(660,0.08); advance('power'); break;
     case 'eclss':  sysState.eclss=true; tele.cabin=14.7; hiss(); advance('eclss'); break;
@@ -1226,6 +1312,126 @@ function pickInteractive(){
 }
 
 /* ===========================================================================
+   ORBITAL BACKDROP — procedural Earth + atmosphere (shown in orbit / docking)
+=========================================================================== */
+function makeEarthTextures(){
+  const greens=['#2e6b3a','#3c7d42','#6b7a3a','#7a6a44'];
+  const lands=[];
+  for(let i=0;i<10;i++){ lands.push({cx:Math.random()*1024, cy:120+Math.random()*280, r:40+Math.random()*70, col:greens[i%greens.length],
+    ph1:Math.random()*6.28, ph2:Math.random()*6.28, ph3:Math.random()*6.28, N:44+(Math.random()*18|0)}); }
+  // irregular, crisp-edged coastline polygon for a land region (multi-octave noisy radius)
+  function landPath(ctx,L){ ctx.beginPath();
+    for(let i=0;i<=L.N;i++){ const a=i/L.N*6.28;
+      let rad=L.r*(0.55 + 0.30*Math.sin(a*3+L.ph1) + 0.16*Math.sin(a*7+L.ph2) + 0.09*Math.sin(a*13+L.ph3) + (Math.sin(a*23+L.ph1*2))*0.05);
+      rad=Math.max(L.r*0.2, rad);
+      const px=L.cx+Math.cos(a)*rad, py=L.cy+Math.sin(a)*rad*0.72;
+      if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+    } ctx.closePath();
+  }
+  // ---- day map (2x resolution for crisp coasts) ----
+  const c=document.createElement('canvas'); c.width=2048; c.height=1024; const x=c.getContext('2d'); x.scale(2,2);
+  const g=x.createLinearGradient(0,0,0,512); g.addColorStop(0,'#0f2a52'); g.addColorStop(0.5,'#1f6fb0'); g.addColorStop(1,'#0f2a52');
+  x.fillStyle=g; x.fillRect(0,0,1024,512);
+  lands.forEach(L=>{
+    landPath(x,L); x.fillStyle=L.col; x.fill();                          // crisp filled landmass
+    x.save(); landPath(x,L); x.clip();                                   // interior terrain variation
+    for(let k=0;k<5;k++){ x.globalAlpha=0.5; x.fillStyle=greens[(Math.random()*greens.length)|0];
+      x.beginPath(); x.ellipse(L.cx+(Math.random()-0.5)*L.r, L.cy+(Math.random()-0.5)*L.r*0.7, L.r*0.3, L.r*0.2, Math.random()*6.28,0,6.28); x.fill(); }
+    x.globalAlpha=1; x.restore();
+    landPath(x,L); x.strokeStyle='rgba(224,236,190,0.6)'; x.lineWidth=1.1; x.stroke();   // coastline highlight
+  });
+  x.fillStyle='rgba(235,244,255,0.9)'; x.fillRect(0,0,1024,34); x.fillRect(0,478,1024,34);   // polar ice
+  // cloud map — its own transparent layer (moderate coverage) so it can parallax above the surface
+  const cl=document.createElement('canvas'); cl.width=2048; cl.height=1024; const z=cl.getContext('2d'); z.scale(2,2);
+  for(let i=0;i<45;i++){ const cx=Math.random()*1024, cy=Math.random()*512, R=20+Math.random()*60;
+    for(let k=0;k<8;k++){ const a=Math.random()*6.28, rr=R*Math.random();
+      const px=cx+Math.cos(a)*rr, py=cy+Math.sin(a)*rr*0.6, s=R*(0.3+Math.random()*0.5);
+      const gr=z.createRadialGradient(px,py,0,px,py,s); gr.addColorStop(0,'rgba(255,255,255,0.5)'); gr.addColorStop(1,'rgba(255,255,255,0)');
+      z.fillStyle=gr; z.beginPath(); z.arc(px,py,s,0,6.28); z.fill(); } }
+  // ---- city-lights map (2x), warm dots clustered on the same landmasses/coasts ----
+  const cc=document.createElement('canvas'); cc.width=2048; cc.height=1024; const y=cc.getContext('2d'); y.scale(2,2);
+  y.fillStyle='#000000'; y.fillRect(0,0,1024,512);
+  lands.forEach(L=>{ const n=40+Math.random()*70;
+    for(let k=0;k<n;k++){ const a=Math.random()*6.28, edge=Math.random();
+      const rr=L.r*(edge<0.4?0.85+Math.random()*0.3:Math.random());
+      const px=L.cx+Math.cos(a)*rr, py=L.cy+Math.sin(a)*rr*0.72;
+      const s=0.5+Math.random()*1.6, al=(0.35+Math.random()*0.6).toFixed(2);
+      y.fillStyle='rgba(255,'+(205+(Math.random()*40|0))+','+(130+(Math.random()*70|0))+','+al+')';
+      y.beginPath(); y.arc(px,py,s,0,6.28); y.fill();
+    }
+    for(let m=0;m<3;m++){ const a=Math.random()*6.28, rr=Math.random()*L.r*0.8;
+      const px=L.cx+Math.cos(a)*rr, py=L.cy+Math.sin(a)*rr*0.72;
+      const gr=y.createRadialGradient(px,py,0,px,py,5); gr.addColorStop(0,'rgba(255,240,190,0.95)'); gr.addColorStop(1,'rgba(255,200,120,0)');
+      y.fillStyle=gr; y.beginPath(); y.arc(px,py,5,0,6.28); y.fill();
+    }
+  });
+  return { day:new THREE.CanvasTexture(c), city:new THREE.CanvasTexture(cc), cloud:new THREE.CanvasTexture(cl) };
+}
+function buildEarth(){
+  const g=new THREE.Group(); g.position.set(0,-360,0); scene.add(g); g.visible=false; exterior.earth=g;
+  const etex=makeEarthTextures();
+  const sun=new THREE.Vector3(1.0,0.35,0.6).normalize();
+  const earthVert=`
+      varying vec2 vUv; varying vec3 vN;
+      void main(){ vUv=uv; vN=normalize(mat3(modelMatrix)*normal);
+        gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }
+    `;
+  const globeMat=new THREE.ShaderMaterial({
+    uniforms:{ map:{value:etex.day}, cityMap:{value:etex.city}, sunDir:{value:sun} },
+    fog:false,
+    vertexShader:earthVert,
+    fragmentShader:`
+      uniform sampler2D map; uniform sampler2D cityMap; uniform vec3 sunDir; varying vec2 vUv; varying vec3 vN;
+      void main(){
+        vec3 day=texture2D(map,vUv).rgb;
+        vec3 city=texture2D(cityMap,vUv).rgb;
+        float l=dot(normalize(vN),normalize(sunDir));
+        float t=smoothstep(-0.20,0.30,l);              // gentle terminator band
+        vec3 night=day*0.05+vec3(0.010,0.020,0.045);   // faint bluish night side
+        vec3 col=mix(night,day,t)+city*(1.0-t)*1.25;   // warm city lights, night side only, fading through dusk
+        gl_FragColor=vec4(col,1.0);
+      }
+    `
+  });
+  const globe=new THREE.Mesh(new THREE.SphereGeometry(320,48,32), globeMat);   // opaque so it reads through the windows
+  globe.rotation.z=0.18; g.add(globe); exterior.earthGlobe=globe;
+  // cloud layer — a slightly higher sphere, terminator-lit, drifting at its own rate → parallax
+  const cloudMat=new THREE.ShaderMaterial({
+    uniforms:{ cloudMap:{value:etex.cloud}, sunDir:{value:sun} },
+    transparent:true, depthWrite:false, fog:false, vertexShader:earthVert,
+    fragmentShader:`
+      uniform sampler2D cloudMap; uniform vec3 sunDir; varying vec2 vUv; varying vec3 vN;
+      void main(){ vec4 cl=texture2D(cloudMap,vUv);
+        float l=dot(normalize(vN),normalize(sunDir));
+        float t=smoothstep(-0.20,0.30,l);
+        vec3 col=mix(vec3(0.06,0.07,0.10),vec3(1.0),t);   // clouds dark at night, white by day
+        gl_FragColor=vec4(col, cl.a*0.85);
+      }
+    `
+  });
+  const clouds=new THREE.Mesh(new THREE.SphereGeometry(324,48,32), cloudMat);
+  clouds.rotation.z=0.18; g.add(clouds); exterior.earthClouds=clouds;
+  exterior.atmoMat=new THREE.MeshBasicMaterial({color:0x5aa0ff,transparent:true,opacity:0.45,side:THREE.BackSide,blending:THREE.AdditiveBlending,depthWrite:false,fog:false});
+  g.add(new THREE.Mesh(new THREE.SphereGeometry(336,48,32),exterior.atmoMat));
+}
+function updateBackdrop(){
+  const inOrbit = dock.on || tele.alt>90000;
+  // Docking control is locked out (red haze + dead hit-zone) until the mission reaches the ORBIT phase
+  const orbitReady = (tele.phase==='ORBIT — NOMINAL');
+  if(exterior.dockToggleInt) exterior.dockToggleInt.enabled = orbitReady;
+  if(exterior.dockLock) exterior.dockLock.visible = !orbitReady;
+  if(exterior.earth){
+    exterior.earth.visible=inOrbit;
+    exterior.earth.position.set(dock.on?200:0, dock.on?480:-360, 0);   // behind/beyond the ISS while docking, else nadir
+    if(inOrbit){ if(exterior.earthGlobe) exterior.earthGlobe.rotation.y+=0.0003;
+      if(exterior.earthClouds) exterior.earthClouds.rotation.y+=0.00044; } }   // clouds drift faster → parallax
+  if(dock.on){                                   // docking implies orbit — force the space look even from the pad
+    if(exterior.sky) exterior.sky.material.color.setRGB(0.012,0.02,0.045);
+    if(exterior.stars){ exterior.stars.visible=true; exterior.stars.material.opacity=1; }
+  }
+}
+
+/* ===========================================================================
    DOCKING — 3D ISS docking port (IDA) + realistic HUD, auto & manual (RCS)
 =========================================================================== */
 function buildDockTarget(){
@@ -1247,6 +1453,110 @@ function buildDockTarget(){
   // nose docking camera looking forward (+Y)
   dock.cam=new THREE.PerspectiveCamera(50,512/330,0.05,3000);
   dock.cam.up.set(0,0,-1); dock.cam.position.set(0,3.05,0); dock.cam.lookAt(0,9,0); scene.add(dock.cam);
+  buildISS();
+}
+
+// Recognizable, extensible ISS built onto the docking port (+Z = away from the Dragon, so it grows above the nose as you close in).
+function buildISS(){
+  if(!dock.port) return;
+  const iss=new THREE.Group(); dock.port.add(iss); dock.iss=iss;
+  iss.position.z=0.28; iss.arrays=[];
+  const hull =new THREE.MeshStandardMaterial({color:0xd9dee4,roughness:0.55,metalness:0.45,emissive:0x0a0d11});
+  const gold =new THREE.MeshStandardMaterial({color:0xb0893a,roughness:0.5,metalness:0.6,emissive:0x0c0902});
+  const truss=new THREE.MeshStandardMaterial({color:0x9aa1a9,roughness:0.5,metalness:0.7,emissive:0x090b0d});
+  const panel=new THREE.MeshStandardMaterial({color:0x243f78,roughness:0.4,metalness:0.3,emissive:0x0a1430,side:THREE.DoubleSide});
+  const rad  =new THREE.MeshStandardMaterial({color:0xeef1f4,roughness:0.4,metalness:0.2,side:THREE.DoubleSide});
+  // pressurized module: a cylinder along +Z with end rings
+  function module(z,len,r,mat){
+    const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,24,1,false), mat||hull);
+    m.rotation.x=Math.PI/2; m.position.z=z+len/2; iss.add(m);
+    [z,z+len].forEach(zz=>{ const rr=new THREE.Mesh(new THREE.TorusGeometry(r,0.06,8,24),truss); rr.position.z=zz; iss.add(rr); });
+    return m;
+  }
+  // module stack: Harmony(node) → Destiny → Unity → Zarya → Zvezda
+  module(0.0, 2.6, 1.00);
+  module(2.6, 3.6, 1.05);
+  module(6.2, 1.8, 1.10);
+  module(8.0, 3.4, 1.10, gold);
+  module(11.4,3.2, 1.05, gold);
+  // lab modules off the node (Columbus +X, Kibo -X)
+  function sideModule(z,dir,len,r){ const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,20,1,false),hull);
+    m.rotation.z=Math.PI/2; m.position.set(dir*(1.0+len/2),0,z); iss.add(m); return m; }
+  sideModule(1.3, 1, 2.2, 0.70);
+  sideModule(1.3,-1, 2.6, 0.75);
+  // main integrated truss (along X) + spine linking it to the stack
+  const trussZ=5.0, halfT=26;
+  const beam=new THREE.Mesh(new THREE.BoxGeometry(halfT*2,0.9,0.9),truss); beam.position.set(0,0,trussZ); iss.add(beam);
+  for(let x=-halfT+3;x<halfT;x+=4){ const d=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.9,1.3),truss);
+    d.position.set(x,0,trussZ); d.rotation.z=Math.PI/4; iss.add(d); }
+  const spine=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.7,4.6),truss); spine.position.set(0,-1.0,trussZ-1.1); iss.add(spine);
+  // thermal radiators near the centre
+  [-1,1].forEach(s=>{ const p=new THREE.Mesh(new THREE.BoxGeometry(3.2,0.05,6),rad); p.position.set(s*4,-1.8,trussZ); p.rotation.x=0.5; iss.add(p); });
+  // 4 solar-array assemblies (inner + outer, each side); each has fore & aft wings → 8 SAWs
+  function solarAssembly(x){
+    const g=new THREE.Group(); g.position.set(x,0,trussZ); iss.add(g); iss.arrays.push(g);
+    const gim=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.32,0.7,16),truss); gim.rotation.z=Math.PI/2; g.add(gim);
+    [-1,1].forEach(s=>{
+      const wing=new THREE.Mesh(new THREE.BoxGeometry(7.4,0.05,15),panel); wing.position.set(0,0,s*9); g.add(wing);
+      const spar=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.12,15),truss); spar.position.set(0,0,s*9); g.add(spar);
+    });
+  }
+  solarAssembly(-25); solarAssembly(-14); solarAssembly(14); solarAssembly(25);
+
+  // ---------------- extra detail ----------------
+  const foil =new THREE.MeshStandardMaterial({color:0xcaa54a,roughness:0.45,metalness:0.7,emissive:0x0d0a03});
+  const glass=new THREE.MeshStandardMaterial({color:0x1b2836,roughness:0.15,metalness:0.4,emissive:0x05090f});
+  const box=(w,h,d,m)=>new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);
+
+  // (1) 3D truss lattice around the core beam + SARJ rotary joints + ORU/battery boxes
+  const tw=0.5;
+  [[-tw,-tw],[-tw,tw],[tw,-tw],[tw,tw]].forEach(([dy,dz])=>{ const l=box(halfT*2,0.09,0.09,truss); l.position.set(0,dy,trussZ+dz); iss.add(l); });
+  for(let x=-halfT+2;x<halfT-1;x+=3){
+    const dt1=box(3.1,0.05,0.05,truss); dt1.position.set(x+1.5, tw, trussZ); dt1.rotation.z= 0.45; iss.add(dt1);
+    const db1=box(3.1,0.05,0.05,truss); db1.position.set(x+1.5,-tw, trussZ); db1.rotation.z=-0.45; iss.add(db1);
+  }
+  [-10,10].forEach(sx=>{ const s=new THREE.Mesh(new THREE.CylinderGeometry(1.45,1.45,1.5,26,1,true),truss); s.rotation.z=Math.PI/2; s.position.set(sx,0,trussZ); iss.add(s);
+    const r=new THREE.Mesh(new THREE.TorusGeometry(1.45,0.14,10,26),foil); r.rotation.y=Math.PI/2; r.position.set(sx,0,trussZ); iss.add(r); });
+  for(let i=0;i<12;i++){ const x=-halfT+3+i*4.2; if(Math.abs(x)<3) continue; const b=box(1.1,0.75,0.75, i%2?hull:foil); b.position.set(x,(i%2?0.75:-0.75),trussZ+0.6); iss.add(b); }
+
+  // (2) deployable white radiator wings (aft of centre), with grid lines
+  for(let i=0;i<3;i++){ const p=box(5.6,0.05,7.5,rad); p.position.set((i-1)*0.15,0.2,trussZ+7+i*0.2); p.rotation.x=-0.35+i*0.02; iss.add(p);
+    for(let g=1;g<7;g++){ const ln=box(5.6,0.02,0.03,truss); ln.position.set((i-1)*0.15,0.23,trussZ+7+i*0.2-3.5+g); ln.rotation.x=-0.35+i*0.02; iss.add(ln); } }
+
+  // (3) more modules (radial off the stack)
+  function radial(z,dx,dy,len,r,mat){ const dir=new THREE.Vector3(dx,dy,0).normalize();
+    const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,18,1,false),mat||hull);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir); m.position.set(dir.x*(1.0+len/2),dir.y*(1.0+len/2),z); iss.add(m);
+    const cap=new THREE.Mesh(new THREE.TorusGeometry(r,0.05,8,18),truss); cap.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir); cap.position.set(dir.x*(1.0+len),dir.y*(1.0+len),z); iss.add(cap);
+    return {len}; }
+  const tranq=radial(7.1, 0,-1, 2.6, 1.00);           // Tranquility (Node 3), nadir
+  radial(6.4, 0, 1, 1.8, 0.70);                        // Quest airlock, zenith
+  radial(5.4, 0,-1, 1.6, 0.85, foil);                  // PMM (Leonardo), nadir-fore
+  radial(12.6,0,-1, 2.2, 0.80, gold);                  // Nauka, nadir (Russian segment)
+  radial(12.6,1, 0, 1.4, 0.60, gold);                  // Rassvet, +X
+
+  // (4) Cupola dome on Tranquility's nadir end, with windows
+  const cupY=-(1.0+tranq.len), cupZ=7.1;
+  const dome=new THREE.Mesh(new THREE.SphereGeometry(0.72,18,12,0,Math.PI*2,0,Math.PI*0.55),hull); dome.position.set(0,cupY,cupZ); dome.rotation.x=Math.PI; iss.add(dome);
+  const cw=new THREE.Mesh(new THREE.CircleGeometry(0.34,18),glass); cw.position.set(0,cupY-0.7,cupZ); cw.rotation.x=Math.PI/2; iss.add(cw);
+  for(let i=0;i<6;i++){ const a=i/6*Math.PI*2; const w=box(0.26,0.02,0.34,glass); w.position.set(Math.cos(a)*0.5,cupY-0.45,cupZ+Math.sin(a)*0.5); w.lookAt(Math.cos(a)*2,cupY-2,cupZ+Math.sin(a)*2); iss.add(w); }
+
+  // (5) docking ports / PMAs on module faces
+  function pma(x,y,z,dx,dy,dz){ const c=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.7,0.7,18,1,true),foil);
+    c.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),new THREE.Vector3(dx,dy,dz).normalize()); c.position.set(x,y,z); iss.add(c); }
+  pma(0,1.05,0.6, 0,1,0); pma(0,0,14.6, 0,0,1); pma(0,-1.05,10.0, 0,-1,0);
+
+  // (6) handrails (spiral greeble) + MLI foil bands
+  for(let i=0;i<14;i++){ const z=0.6+i*1.0; if(z>14) break; const a=i*1.3;
+    const rl=box(0.55,0.035,0.035,truss); rl.position.set(Math.cos(a)*1.05,Math.sin(a)*1.05,z); rl.rotation.z=a; iss.add(rl); }
+  [3.0,9.0].forEach(z=>{ const band=new THREE.Mesh(new THREE.CylinderGeometry(1.12,1.12,0.5,24,1,true),foil); band.rotation.x=Math.PI/2; band.position.set(0,0,z); iss.add(band); });
+
+  // (7) antennas & dishes
+  function dish(x,y,z,dx,dy,dz){ const d=new THREE.Mesh(new THREE.SphereGeometry(0.4,14,8,0,Math.PI*2,0,Math.PI*0.4),rad);
+    d.quaternion.setFromUnitVectors(new THREE.Vector3(0,-1,0),new THREE.Vector3(dx,dy,dz).normalize()); d.position.set(x,y,z); iss.add(d);
+    const stem=box(0.04,0.5,0.04,truss); stem.position.set(x,y-0.25,z); iss.add(stem); }
+  dish(1.2,0.6,13.2, 1,0.5,0.2); dish(-1.0,0.8,3.5, -1,0.6,0);
+  const whip=box(0.03,1.4,0.03,truss); whip.position.set(0,1.6,12.0); iss.add(whip);
 }
 
 function rcsImpulse(ax,ay,az){ if(!dock.on||dock.mode!=='manual'||dock.docked||dock.failed) return;
@@ -1271,13 +1581,14 @@ function updateDock(dt){
       dock.z=0; const lat=Math.hypot(dock.x,dock.y), rate=Math.abs(dock.vz);
       if(lat<0.30 && rate<0.20 && Math.abs(dock.roll)<6){ dock.docked=true; thump(); }
       else { dock.failed=true; beep(200,0.3); }
-      dock.vx=dock.vy=dock.vz=0;
+      dock.vx=dock.vy=dock.vz=0; setDockControlsEnabled();
     }
   }
   if(dock.port){
     dock.port.position.set(dock.x, DOCK_NOSE_Y + DOCK_PORT_OFF + dock.z, -dock.y);
-    dock.port.lookAt(0, DOCK_NOSE_Y, 0);
-    dock.port.rotateZ(dock.roll*Math.PI/180);
+    dock.port.rotation.set(-Math.PI/2, 0, 0);      // IDA (-Z) faces down at the nose; ISS (+Z) extends UP, away from the ship
+    dock.port.rotateZ(dock.roll*Math.PI/180);       // roll about the vertical approach axis
+    if(dock.iss) dock.iss.arrays.forEach(g=>{ g.rotation.x += dt*0.02; });   // slow sun-tracking
   }
 }
 
@@ -1313,9 +1624,15 @@ function drawDockHUD(ctx){
   ctx.textAlign='right'; ctx.fillStyle=Math.abs(dock.roll)<6?green:amber; ctx.fillText('ROLL '+dock.roll.toFixed(1)+'°', W-14, H-30);
   // status
   ctx.textAlign='center'; ctx.font='bold 20px Menlo,monospace';
-  if(dock.docked){ ctx.fillStyle=green; ctx.fillText('● CAPTURE — DOCKED', cx, cy+118); }
-  else if(dock.failed){ ctx.fillStyle=red; ctx.fillText('✕ MISS — flip switch to retry', cx, cy+118); }
-  else { ctx.fillStyle=green; ctx.fillText(dock.z<12?'STATION KEEPING':'APPROACH', cx, cy+118); }
+  if(dock.docked){
+    ctx.font='bold 18px Menlo,monospace';
+    const s='● CAPTURE — DOCKED', w=ctx.measureText(s).width;
+    ctx.fillStyle='rgba(4,12,20,0.78)'; ctx.fillRect(cx-w/2-12, cy-86, w+24, 44);   // dark plate so it reads over the red port
+    ctx.fillStyle=green; ctx.fillText(s, cx, cy-64);
+    ctx.font='12px Menlo,monospace'; ctx.fillStyle='#a9bccf'; ctx.fillText('undock switch on panel', cx, cy-48);
+  }
+  else if(dock.failed){ ctx.font='bold 20px Menlo,monospace'; ctx.fillStyle=red; ctx.fillText('✕ MISS — flip switch to retry', cx, cy+118); }
+  else { ctx.font='bold 20px Menlo,monospace'; ctx.fillStyle=green; ctx.fillText(dock.z<12?'STATION KEEPING':'APPROACH', cx, cy+118); }
   // manual RCS pads
   if(man && !dock.docked && !dock.failed){
     const pad=(px,py,lbl)=>{ ctx.strokeStyle=blue; ctx.lineWidth=2; ctx.globalAlpha=0.9; ctx.strokeRect(px-19,py-15,38,30);
@@ -1346,11 +1663,32 @@ function paintDockSwitch(){
 
 function setDockControlsEnabled(){
   const man = dock.on && dock.mode==='manual';
-  if(dock.ctlMode) dock.ctlMode.enabled = dock.on;
-  dock.rcsBtns.forEach(b=>b.enabled=man);
+  if(dock.ctlMode) dock.ctlMode.enabled = dock.on && !dock.docked;
+  dock.rcsBtns.forEach(b=>b.enabled = man && !dock.docked);
+  updateUndockGuard();
+}
+// UNDOCK guarded switch on the panel — only usable while captured
+function updateUndockGuard(){
+  const b=exterior.undockBtn; if(!b) return;
+  const live = dock.on && dock.docked;
+  if(!live) b.open=false;
+  const ug=interactives.find(i=>i.id==='undock_guard');
+  const ub=interactives.find(i=>i.id==='undock');
+  if(ug) ug.enabled = live && !b.open;
+  if(ub) ub.enabled = live && b.open;
+}
+function undock(){
+  if(!dock.on || !dock.docked) return;
+  dock.docked=false; dock.failed=false;
+  dock.mode='manual';                                    // hand control to the pilot so it won't auto-redock
+  dock.z=Math.max(dock.z,0.2); dock.vz=0.5;              // gentle separation, range opening
+  dock.vx=(Math.random()-0.5)*0.03; dock.vy=(Math.random()-0.5)*0.03;
+  thump(); beep(430,0.12);                               // separation clunk
+  setDockControlsEnabled();
 }
 
 function toggleDock(){
+  if(!dock.on && tele.phase!=='ORBIT — NOMINAL'){ beep(200,0.15); return; }   // can't dock until in orbit
   dock.on=!dock.on;
   if(dock.on){
     Object.assign(dock, DOCK_START); dock.on=true; dock.docked=false; dock.failed=false; dock.t=0;
@@ -1393,6 +1731,7 @@ function loop(){
     updateStackFX(dt);
     updateDock(dt);
   }
+  updateBackdrop();
   updateHighlight();
   drawScreens();
   updateHud();
@@ -1436,7 +1775,7 @@ function updateHighlight(){
 }
 
 function updateGuards(dt){
-  ['arm','abort'].forEach(id=>{ const b=exterior[id+'Btn']; if(!b) return;
+  ['arm','abort','undock'].forEach(id=>{ const b=exterior[id+'Btn']; if(!b) return;
     const target=b.open?-2.2:0; // hinge rotation
     b.hinge.rotation.x += (target-b.hinge.rotation.x)*Math.min(1,dt*10); });
 }
