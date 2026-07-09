@@ -1264,9 +1264,52 @@ function setupVR(){
       const geo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0),new THREE.Vector3(0,0,-5)]);
       const line=new THREE.Line(geo,new THREE.LineBasicMaterial({color:0x3da9fc}));
       c.add(line); controllerRays.push(line);
+      // SpaceX suit glove that rides the controller's tracked pose
+      const glove=makeGlove(); c.add(glove);
+      const tipDot=new THREE.Mesh(new THREE.SphereGeometry(0.012,10,8), new THREE.MeshBasicMaterial({color:0x8fbaff}));
+      tipDot.position.set(0,-0.02,-0.12); c.add(tipDot); c.userData.tipDot=tipDot; c.userData.lastTouch=null;
+      c.addEventListener('connected', e=>{ c.userData.inputSource=e.data; glove.scale.x=(e.data && e.data.handedness==='left')?-1:1; });
     }
   }catch(e){ console.warn('VR controller setup skipped:', e); }
   const ch=document.getElementById('crosshair'); if(ch) ch.style.display='none';
+}
+
+// SpaceX spacesuit glove (right-hand default; scale.x=-1 mirrors it for the left)
+function makeGlove(){
+  const g=new THREE.Group();
+  const white=new THREE.MeshStandardMaterial({color:0xeef1f5,roughness:0.55,metalness:0.03,side:THREE.DoubleSide});
+  const dark =new THREE.MeshStandardMaterial({color:0x2a2e34,roughness:0.5,metalness:0.2,side:THREE.DoubleSide});
+  const black=new THREE.MeshStandardMaterial({color:0x15171b,roughness:0.5,metalness:0.15,side:THREE.DoubleSide});
+  const palm=new THREE.Mesh(new THREE.BoxGeometry(0.085,0.036,0.10),white); palm.position.set(0,0,-0.02); g.add(palm);
+  const knuck=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.018,0.085,10),white); knuck.rotation.z=Math.PI/2; knuck.position.set(0,0,-0.072); g.add(knuck);
+  const fingers=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.052,0.05),dark); fingers.position.set(0,-0.022,-0.095); fingers.rotation.x=0.55; g.add(fingers);
+  for(let i=-1;i<=1;i++){ const s=new THREE.Mesh(new THREE.BoxGeometry(0.004,0.055,0.05),black); s.position.set(i*0.022,-0.022,-0.096); s.rotation.x=0.55; g.add(s); }
+  const thumb=new THREE.Mesh(new THREE.CylinderGeometry(0.014,0.017,0.055,10),white); thumb.position.set(0.046,0.004,-0.03); thumb.rotation.set(0.4,0,0.8); g.add(thumb);
+  const thumbTip=new THREE.Mesh(new THREE.SphereGeometry(0.015,10,8),dark); thumbTip.position.set(0.064,0.016,-0.052); g.add(thumbTip);
+  const cuff=new THREE.Mesh(new THREE.CylinderGeometry(0.046,0.052,0.055,16),black); cuff.rotation.x=Math.PI/2; cuff.position.set(0,0,0.05); g.add(cuff);
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(0.05,0.008,8,18),dark); ring.position.set(0,0,0.025); g.add(ring);
+  return g;
+}
+
+// Direct-touch interaction: fire a hit-zone's action when a glove fingertip enters it (once per touch, with a haptic pulse).
+const _tip=new THREE.Vector3();
+function gloveInside(p, m){
+  if(!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+  const l=m.worldToLocal(p.clone()), bb=m.geometry.boundingBox, mg=0.03;
+  return l.x>bb.min.x-mg && l.x<bb.max.x+mg && l.y>bb.min.y-mg && l.y<bb.max.y+mg && l.z>bb.min.z-mg && l.z<bb.max.z+mg;
+}
+function haptic(c,intensity,ms){ try{ const gp=c.userData.inputSource&&c.userData.inputSource.gamepad;
+  const a=gp&&gp.hapticActuators&&gp.hapticActuators[0]; if(a&&a.pulse) a.pulse(intensity,ms); }catch(e){} }
+function updateGloveTouch(){
+  if(mode!=='vr' || !controllers.length) return;
+  controllers.forEach(c=>{
+    _tip.set(0,-0.02,-0.12); c.localToWorld(_tip);
+    let hit=null;
+    for(const it of interactives){ if(it.enabled && gloveInside(_tip, it.mesh)){ hit=it; break; } }
+    if(c.userData.tipDot) c.userData.tipDot.material.color.setHex(hit?0x39d98a:0x8fbaff);
+    if(hit){ if(hit!==c.userData.lastTouch){ c.userData.lastTouch=hit; haptic(c,0.6,40); try{ hit.onSelect(); }catch(e){} } }
+    else c.userData.lastTouch=null;
+  });
 }
 
 // Minimal Enter-VR button (replaces THREE.VRButton, which fails to load from the cdnjs examples path on Quest).
@@ -1733,6 +1776,7 @@ function loop(){
   }
   updateBackdrop();
   updateHighlight();
+  updateGloveTouch();
   drawScreens();
   updateHud();
   if(audio) updateEngineAudio();
