@@ -29,6 +29,7 @@
     --cr-accent:  #e8803a;
     --gs-accent:  #d3dae6;
     --cd-accent:  #a9dcff;
+    --tb-accent:  #4d86ff;
   }
 
   *{ box-sizing: border-box; }
@@ -287,6 +288,7 @@
   .cabinet.cr{  --accent: var(--cr-accent); }
   .cabinet.gs{  --accent: var(--gs-accent); }
   .cabinet.cd{  --accent: var(--cd-accent); }
+  .cabinet.tb{  --accent: var(--tb-accent); }
 
   /* ---------- Footer ---------- */
   footer{
@@ -1196,10 +1198,142 @@
         <div class="play"><span>Start the Countdown</span><span class="arrow">▶</span></div>
       </a>
 
+      <!-- ============ TOYBOX TANK ============ -->
+      <a class="cabinet tb" href="TB-1.html" aria-label="Play Toybox Tank">
+        <div class="screen">
+          <span class="badge">VR READY</span>
+          <svg viewBox="0 0 400 250" role="img" aria-label="A blue toy tank firing at a red enemy tank across a living-room carpet">
+            <defs>
+              <linearGradient id="tbWall" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#ece0c9"/>
+                <stop offset="100%" stop-color="#d8c6a6"/>
+              </linearGradient>
+              <linearGradient id="tbCarpet" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#cdb78f"/>
+                <stop offset="100%" stop-color="#a2855e"/>
+              </linearGradient>
+            </defs>
+
+            <!-- room -->
+            <rect width="400" height="130" fill="url(#tbWall)"/>
+            <rect y="122" width="400" height="10" fill="#f3ede1"/>
+            <rect y="130" width="400" height="120" fill="url(#tbCarpet)"/>
+            <!-- rug in the foreground -->
+            <ellipse cx="200" cy="216" rx="178" ry="34" fill="#b58a5f"/>
+            <ellipse cx="200" cy="216" rx="178" ry="34" fill="none" stroke="#8f6a45" stroke-width="3"/>
+            <ellipse cx="200" cy="216" rx="158" ry="27" fill="none" stroke="#caa377" stroke-width="2" opacity="0.7"/>
+
+            <!-- couch, back-left -->
+            <g>
+              <rect x="-6" y="66" width="150" height="46" rx="12" fill="#4f9a97"/>
+              <rect x="-6" y="100" width="162" height="30" rx="9" fill="#5aa8a4"/>
+              <rect x="126" y="80" width="30" height="50" rx="12" fill="#57a4a0"/>
+              <rect x="6" y="74" width="58" height="30" rx="7" fill="#68b6b2"/>
+              <rect x="72" y="74" width="52" height="30" rx="7" fill="#68b6b2"/>
+              <ellipse cx="76" cy="132" rx="86" ry="7" fill="#8a6f4c" opacity="0.4"/>
+            </g>
+
+            <!-- alphabet blocks, back-right -->
+            <g stroke="#a97c2f" stroke-width="1.5" font-family="'Bungee',sans-serif" font-size="15" text-anchor="middle">
+              <rect x="300" y="98" width="32" height="30" fill="#d8a54e"/>
+              <text x="316" y="120" fill="#8a5f1f" stroke="none">A</text>
+              <rect x="333" y="98" width="30" height="30" fill="#c8923c"/>
+              <text x="348" y="120" fill="#8a5f1f" stroke="none">B</text>
+              <rect x="312" y="68" width="30" height="30" fill="#e2b45a"/>
+              <text x="327" y="90" fill="#8a5f1f" stroke="none">C</text>
+              <ellipse cx="332" cy="130" rx="40" ry="6" fill="#8a6f4c" opacity="0.4"/>
+            </g>
+
+            <!-- giant crayon on the floor, lower-left -->
+            <g transform="rotate(-7 60 224)">
+              <rect x="20" y="218" width="66" height="12" rx="6" fill="#e5533a"/>
+              <rect x="20" y="218" width="10" height="12" fill="#c53f2a"/>
+              <polygon points="86,218 98,224 86,230" fill="#f2c9a0"/>
+            </g>
+
+            <!-- tank shadows -->
+            <ellipse cx="105" cy="196" rx="52" ry="9" fill="#6f5638" opacity="0.4"/>
+            <ellipse cx="292" cy="198" rx="46" ry="8" fill="#6f5638" opacity="0.4"/>
+
+            <!-- green army men -->
+            <g transform="translate(170,206) scale(1.05)">
+              <ellipse cx="0" cy="0" rx="7" ry="2.5" fill="#3d7a2c"/>
+              <path d="M-3,0 C-5,-9 -3,-14 0,-14 C3,-14 5,-9 3,0 Z" fill="#4e8f3a"/>
+              <circle cx="0" cy="-14" r="3" fill="#4e8f3a"/>
+              <rect x="-4" y="-16.5" width="8" height="3" rx="1.5" fill="#437f31"/>
+              <line x1="1" y1="-9" x2="11" y2="-12" stroke="#2f5e22" stroke-width="2"/>
+            </g>
+            <g transform="translate(244,210) rotate(82)">
+              <ellipse cx="0" cy="0" rx="6.5" ry="2.3" fill="#3d7a2c" opacity="0.7"/>
+              <path d="M-3,0 C-5,-9 -3,-14 0,-14 C3,-14 5,-9 3,0 Z" fill="#4e8f3a"/>
+              <circle cx="0" cy="-14" r="3" fill="#4e8f3a"/>
+              <line x1="1" y1="-9" x2="11" y2="-12" stroke="#2f5e22" stroke-width="2"/>
+            </g>
+
+            <!-- RED enemy tank (facing left) -->
+            <g transform="translate(340,158) scale(-1.04,1.04)" stroke-linejoin="round">
+              <rect x="0" y="22" width="70" height="14" rx="7" fill="#6e2020"/>
+              <circle cx="6" cy="31" r="6" fill="#4a1414"/><circle cx="64" cy="31" r="6" fill="#4a1414"/>
+              <g fill="#4a1414"><circle cx="16" cy="31" r="5"/><circle cx="28" cy="31" r="5"/><circle cx="40" cy="31" r="5"/><circle cx="52" cy="31" r="5"/></g>
+              <g fill="#ef5a5a"><circle cx="16" cy="31" r="2"/><circle cx="28" cy="31" r="2"/><circle cx="40" cy="31" r="2"/><circle cx="52" cy="31" r="2"/></g>
+              <rect x="3" y="20" width="64" height="5" fill="#8a2a2a"/>
+              <polygon points="4,20 4,10 12,10 18,4 50,4 58,10 70,10 70,20" fill="#d64545" stroke="#6e2020" stroke-width="1"/>
+              <rect x="24" y="-7" width="26" height="15" rx="6" fill="#ef5a5a" stroke="#6e2020" stroke-width="1"/>
+              <circle cx="30" cy="-7" r="3" fill="#d64545"/>
+              <rect x="48" y="-3" width="34" height="5" rx="2" fill="#8a2a2a"/>
+              <rect x="78" y="-5" width="5" height="9" rx="1" fill="#6e2020"/>
+              <path d="M10,9 Q30,5 50,9" stroke="#ffd0d0" stroke-width="2" fill="none" opacity="0.6"/>
+            </g>
+
+            <!-- BLUE player tank (facing right) -->
+            <g transform="translate(50,150) scale(1.2)" stroke-linejoin="round">
+              <rect x="0" y="22" width="70" height="14" rx="7" fill="#24406e"/>
+              <circle cx="6" cy="31" r="6" fill="#16294a"/><circle cx="64" cy="31" r="6" fill="#16294a"/>
+              <g fill="#16294a"><circle cx="16" cy="31" r="5"/><circle cx="28" cy="31" r="5"/><circle cx="40" cy="31" r="5"/><circle cx="52" cy="31" r="5"/></g>
+              <g fill="#4d86ff"><circle cx="16" cy="31" r="2"/><circle cx="28" cy="31" r="2"/><circle cx="40" cy="31" r="2"/><circle cx="52" cy="31" r="2"/></g>
+              <rect x="3" y="20" width="64" height="5" fill="#2c4c84"/>
+              <polygon points="4,20 4,10 12,10 18,4 50,4 58,10 70,10 70,20" fill="#3f7ad6" stroke="#24406e" stroke-width="1"/>
+              <rect x="24" y="-7" width="26" height="15" rx="6" fill="#4d86ff" stroke="#24406e" stroke-width="1"/>
+              <circle cx="30" cy="-7" r="3" fill="#3f7ad6"/>
+              <rect x="48" y="-3" width="34" height="5" rx="2" fill="#2c4c84"/>
+              <rect x="78" y="-5" width="5" height="9" rx="1" fill="#24406e"/>
+              <path d="M10,9 Q30,5 50,9" stroke="#cfe0ff" stroke-width="2" fill="none" opacity="0.6"/>
+              <ellipse cx="34" cy="-4" rx="8" ry="2" fill="#cfe0ff" opacity="0.5"/>
+            </g>
+
+            <!-- muzzle flash at the blue barrel tip -->
+            <g transform="translate(151,150)">
+              <polygon points="0,-9 4,-2 12,0 4,2 0,9 -4,2 -12,0 -4,-2" fill="#ffd24d"/>
+              <polygon points="0,-5 3,-1 8,0 3,1 0,5 -3,1 -8,0 -3,-1" fill="#fff4c2"/>
+              <circle cx="0" cy="0" r="3" fill="#ffffff"/>
+            </g>
+            <!-- shell in flight -->
+            <g>
+              <ellipse cx="192" cy="150" rx="4" ry="2.4" fill="#ffe08a" stroke="#c99a2e" stroke-width="0.8"/>
+              <line x1="176" y1="150" x2="186" y2="150" stroke="#ffe08a" stroke-width="1.5" opacity="0.6"/>
+            </g>
+            <!-- little impact spark near the red tank -->
+            <g fill="#ffb347" opacity="0.9">
+              <circle cx="250" cy="150" r="2.4"/>
+              <circle cx="256" cy="146" r="1.4"/>
+              <circle cx="255" cy="154" r="1.2"/>
+            </g>
+          </svg>
+        </div>
+        <div class="strip">
+          <h2>Toybox Tank</h2>
+        </div>
+        <div class="body">
+          <p>Command a little blue plastic tank across the living-room floor, blasting red enemy tanks and green army men wave after wave. Take cover behind the couch, the blocks, and the clutter — it's a war zone down there.</p>
+          <div class="meta">TOY COMBAT · VR + BROWSER · WAVE BATTLES</div>
+        </div>
+        <div class="play"><span>Roll Out</span><span class="arrow">▶</span></div>
+      </a>
+
     </main>
 
     <footer>
-      <span class="pulse">▸</span> 8 games loaded · built for headsets and browsers
+      <span class="pulse">▸</span> 9 games loaded · built for headsets and browsers
     </footer>
   </div>
 </body>
