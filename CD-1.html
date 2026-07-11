@@ -200,11 +200,7 @@ function start(m){
   document.getElementById('exit').style.display='block';
   const warpBtn=document.getElementById('warp');
   warpBtn.style.display='block';
-  warpBtn.onclick=()=>{
-    WARP = (WARP===1) ? 10 : 1;
-    warpBtn.classList.toggle('on', WARP!==1);
-    warpBtn.textContent = (WARP===1) ? 'Warp ×10' : 'Warp ×10 · ON';
-  };
+  warpBtn.onclick=toggleWarp;
   buildWorld();
   setHud(CHECK[0]);
   refreshButtonStates();
@@ -579,6 +575,18 @@ function buildConsole(){
     addCenterHit(fx,       fy-0.022, 0.055,0.036, ()=>rcsImpulse(0,0, 0.06), 'rcsB'),  // back
   ];
 
+  // WARP ×10 toast — a world-space pill above the centre screen (visible & touchable in VR; clickable on desktop)
+  { const wcv=document.createElement('canvas'); wcv.width=360; wcv.height=92;
+    exterior.warpCtx=wcv.getContext('2d'); exterior.warpTex=new THREE.CanvasTexture(wcv);
+    const toast=new THREE.Mesh(new THREE.PlaneGeometry(0.34,0.087), new THREE.MeshBasicMaterial({map:exterior.warpTex,transparent:true}));
+    const cs=screens[1].mesh; toast.position.copy(cs.position); toast.rotation.copy(cs.rotation);
+    toast.translateY(CFG.screenH/2+0.09); toast.translateZ(0.02); group.add(toast); exterior.warpToast=toast;
+    const wh=new THREE.Mesh(new THREE.PlaneGeometry(0.37,0.11), new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}));
+    wh.position.copy(toast.position); wh.rotation.copy(toast.rotation); wh.translateZ(0.008); group.add(wh);
+    interactives.push({ mesh:wh, id:'warpToast', enabled:true, onSelect:toggleWarp });
+    drawWarpToast();
+  }
+
   deck.add(group);
 }
 function paintCamLabel(name){
@@ -602,6 +610,23 @@ const CAM_BTNS = [
 ];
 function _rr(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r);
   c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+// Warp toast (world-space so it works in VR) + shared toggle used by it and the desktop button
+function drawWarpToast(){
+  const c=exterior.warpCtx; if(!c) return; const W=c.canvas.width, H=c.canvas.height, on=WARP!==1;
+  c.clearRect(0,0,W,H);
+  c.fillStyle = on ? 'rgba(57,217,138,0.92)' : 'rgba(11,27,46,0.90)'; _rr(c,3,3,W-6,H-6,H/2); c.fill();
+  c.lineWidth=4; c.strokeStyle = on ? '#a9ffcf' : '#3da9fc'; _rr(c,3,3,W-6,H-6,H/2); c.stroke();
+  c.fillStyle = on ? '#04121f' : '#cfe0f2'; c.font='bold 34px monospace'; c.textAlign='center'; c.textBaseline='middle';
+  c.fillText(on ? '\u23E9 WARP \u00D710 \u00B7 ON' : '\u23E9 WARP \u00D710', W/2, H/2+2);
+  exterior.warpTex.needsUpdate=true;
+}
+function toggleWarp(){
+  WARP = (WARP===1) ? 10 : 1;
+  const b=document.getElementById('warp');
+  if(b){ b.classList.toggle('on', WARP!==1); b.textContent = (WARP===1) ? 'Warp \u00D710' : 'Warp \u00D710 \u00B7 ON'; }
+  drawWarpToast();
+  if(typeof beep==='function') beep(WARP!==1?820:520,0.05);
+}
 function drawCamPanel(){
   const c=exterior.camPanelCtx; if(!c) return;
   const W=c.canvas.width, H=c.canvas.height, n=CAM_BTNS.length, pad=8, rh=(H-pad*2)/n;
@@ -773,7 +798,8 @@ function buildExterior(){
 
 /* ---- Crew Access Arm / White Room on the pad, seen through the open hatch (-Z side) ---- */
 function buildBoardingArm(){
-  const g=new THREE.Group(); scene.add(g); exterior.boardingArm=g;
+  const pivot=new THREE.Group(); scene.add(pivot); exterior.armPivot=pivot;
+  const g=new THREE.Group(); pivot.add(g); exterior.boardingArm=g;
   const white=new THREE.MeshStandardMaterial({color:0xeef1f4,roughness:0.75,metalness:0.05,side:THREE.DoubleSide});
   const gray =new THREE.MeshStandardMaterial({color:0xaab2ba,roughness:0.6,metalness:0.3,side:THREE.DoubleSide});
   const rail =new THREE.MeshStandardMaterial({color:0xd0d5da,roughness:0.5,metalness:0.4});
@@ -799,6 +825,7 @@ function buildBoardingArm(){
   tower.position.set(0,3.2,zFar-wlen-0.6); g.add(tower);
   const edges=new THREE.LineSegments(new THREE.EdgesGeometry(tower.geometry), new THREE.LineBasicMaterial({color:0x565e66}));
   edges.position.copy(tower.position); g.add(edges);
+  const pivZ=zFar-wlen-0.6; pivot.position.z=pivZ; g.position.z=-pivZ;   // vertical hinge at the tower so the arm can swing clear
 }
 
 /* ---- External Falcon 9 + Dragon stack (below the capsule) so the cameras see a real vehicle ---- */
@@ -868,6 +895,12 @@ function updateStackFX(dt){
       exterior.booster.rotation.z = d*0.12;             // slow end-over-end tumble
       exterior.booster.rotation.x = d*0.05;
     } else { exterior.booster.position.y=-30; exterior.booster.rotation.set(0,0,0); }
+  }
+  // crew-access arm swings away once the countdown begins, and stays with the pad/tower (doesn't ride the rocket up)
+  if(exterior.armPivot){
+    const target = sysState.launched ? -1.6 : 0;
+    exterior.armPivot.rotation.y += (target - exterior.armPivot.rotation.y) * Math.min(1, dt*0.5);
+    exterior.armPivot.position.y = -tele.alt*0.02;
   }
 }
 
@@ -1268,7 +1301,7 @@ function setupVR(){
       const glove=makeGlove(); c.add(glove);
       const tipDot=new THREE.Mesh(new THREE.SphereGeometry(0.012,10,8), new THREE.MeshBasicMaterial({color:0x8fbaff}));
       tipDot.position.set(0,-0.02,-0.12); c.add(tipDot); c.userData.tipDot=tipDot; c.userData.lastTouch=null;
-      c.addEventListener('connected', e=>{ c.userData.inputSource=e.data; glove.scale.x=(e.data && e.data.handedness==='left')?-1:1; });
+      c.addEventListener('connected', e=>{ c.userData.inputSource=e.data; glove.scale.x=(e.data && e.data.handedness==='left')?1:-1; });
     }
   }catch(e){ console.warn('VR controller setup skipped:', e); }
   const ch=document.getElementById('crosshair'); if(ch) ch.style.display='none';
@@ -1285,7 +1318,7 @@ function makeGlove(){
   const fingers=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.052,0.05),dark); fingers.position.set(0,-0.022,-0.095); fingers.rotation.x=0.55; g.add(fingers);
   for(let i=-1;i<=1;i++){ const s=new THREE.Mesh(new THREE.BoxGeometry(0.004,0.055,0.05),black); s.position.set(i*0.022,-0.022,-0.096); s.rotation.x=0.55; g.add(s); }
   const thumb=new THREE.Mesh(new THREE.CylinderGeometry(0.014,0.017,0.055,10),white); thumb.position.set(0.046,0.004,-0.03); thumb.rotation.set(0.4,0,0.8); g.add(thumb);
-  const thumbTip=new THREE.Mesh(new THREE.SphereGeometry(0.015,10,8),dark); thumbTip.position.set(0.064,0.016,-0.052); g.add(thumbTip);
+  const thumbTip=new THREE.Mesh(new THREE.SphereGeometry(0.016,12,10),dark); thumbTip.position.set(0,0.028,0); thumb.add(thumbTip);   // grey dome on the thumb end
   const cuff=new THREE.Mesh(new THREE.CylinderGeometry(0.046,0.052,0.055,16),black); cuff.rotation.x=Math.PI/2; cuff.position.set(0,0,0.05); g.add(cuff);
   const ring=new THREE.Mesh(new THREE.TorusGeometry(0.05,0.008,8,18),dark); ring.position.set(0,0,0.025); g.add(ring);
   return g;
@@ -1293,6 +1326,7 @@ function makeGlove(){
 
 // Direct-touch interaction: fire a hit-zone's action when a glove fingertip enters it (once per touch, with a haptic pulse).
 const _tip=new THREE.Vector3();
+const TOUCH_COOLDOWN=300;   // ms lockout after a touch — stops re-firing when a different hit-zone appears in the same spot
 function gloveInside(p, m){
   if(!m.geometry.boundingBox) m.geometry.computeBoundingBox();
   const l=m.worldToLocal(p.clone()), bb=m.geometry.boundingBox, mg=0.03;
@@ -1302,13 +1336,20 @@ function haptic(c,intensity,ms){ try{ const gp=c.userData.inputSource&&c.userDat
   const a=gp&&gp.hapticActuators&&gp.hapticActuators[0]; if(a&&a.pulse) a.pulse(intensity,ms); }catch(e){} }
 function updateGloveTouch(){
   if(mode!=='vr' || !controllers.length) return;
+  const now=performance.now();
   controllers.forEach(c=>{
     _tip.set(0,-0.02,-0.12); c.localToWorld(_tip);
     let hit=null;
     for(const it of interactives){ if(it.enabled && gloveInside(_tip, it.mesh)){ hit=it; break; } }
     if(c.userData.tipDot) c.userData.tipDot.material.color.setHex(hit?0x39d98a:0x8fbaff);
-    if(hit){ if(hit!==c.userData.lastTouch){ c.userData.lastTouch=hit; haptic(c,0.6,40); try{ hit.onSelect(); }catch(e){} } }
-    else c.userData.lastTouch=null;
+    if(hit){
+      // fire only on the rising edge of contact; the finger must lift before the next press,
+      // so a control that swaps into the same spot under a held finger no longer re-triggers
+      if(!c.userData.contact && now>=(c.userData.cool||0)){
+        c.userData.contact=true; c.userData.cool=now+TOUCH_COOLDOWN;
+        haptic(c,0.6,40); try{ hit.onSelect(); }catch(e){}
+      }
+    } else c.userData.contact=false;
   });
 }
 
@@ -1780,14 +1821,16 @@ function loop(){
   drawScreens();
   updateHud();
   if(audio) updateEngineAudio();
-  if(centerMode==='cam' && exterior.topRT && exterior.cams){
+  let feedCam=null;
+  if(centerMode==='cam' && exterior.cams) feedCam=exterior.cams[exterior.camIndex].cam;
+  else if(centerMode==='dock' && dock.cam) feedCam=dock.cam;
+  if(feedCam && exterior.topRT){
+    const wasXR=renderer.xr.enabled;
+    renderer.xr.enabled=false;                 // else WebXR overrides our camera with the headset view
     renderer.setRenderTarget(exterior.topRT);
-    renderer.render(scene, exterior.cams[exterior.camIndex].cam);
+    renderer.render(scene, feedCam);
     renderer.setRenderTarget(null);
-  } else if(centerMode==='dock' && exterior.topRT && dock.cam){
-    renderer.setRenderTarget(exterior.topRT);
-    renderer.render(scene, dock.cam);
-    renderer.setRenderTarget(null);
+    renderer.xr.enabled=wasXR;
   }
   renderer.render(scene,camera);
 }
