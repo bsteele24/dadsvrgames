@@ -77,7 +77,7 @@
 <div id="startOverlay">
   <div class="lid">
     <h1>TOYBOX <span>TANK</span></h1>
-    <div class="tag">You've been shrunk. The living room is a battlefield.</div>
+    <div class="tag">You've been shrunk. Survive 5 waves to clear the living room.</div>
     <div id="controls"></div><br>
     <button id="startBtn">ROLL OUT</button>
   </div>
@@ -155,6 +155,7 @@ const CFG = {
     maxCount: 4
   },
   world: { boundX: 150, boundZ: 130 },   // drivable clamp (half extents)
+  level: { maxWaves: 5 },                 // clear this many waves to beat the level
   gfx: { shadows: true, shadowMap: 2048, dust: 130 },
   vr: { vignette: true, vignetteMax: 0.55 },
   audio: { master: 0.5 }
@@ -173,7 +174,7 @@ let keys = {}, mouseFire = false;
 let joyL = { x: 0, y: 0 }, joyLook = { x: 0, y: 0 }, fireHeld = false;
 let colliders = [];        // {t:'c',x,z,r,h} or {t:'b',x1,z1,x2,z2,h}
 let soldiers = [], shells = [], bullets = [], particles = [];
-let wave = 1, aliveCount = 0, nextWaveT = 0, waveActive = false;
+let wave = 1, aliveCount = 0, nextWaveT = 0, waveActive = false, won = false;
 let elapsed = 0, msgT = 0;
 const SPAWN = { x: 0, z: 105, yaw: 0 };
 const V = new THREE.Vector3(), V2 = new THREE.Vector3(), Q = new THREE.Quaternion(), M4 = new THREE.Matrix4();
@@ -815,7 +816,7 @@ function drawVRPanel() {
   g.fillStyle = frac > 0.5 ? '#4caf50' : (frac > 0.25 ? '#f7c948' : '#e23b3b');
   g.fillRect(100, 104, 370 * Math.max(0, frac), 30);
   g.fillStyle = '#2b2b2b'; g.font = 'bold 28px Fredoka, sans-serif';
-  g.fillText('WAVE ' + wave + '   ·   ENEMIES ' + aliveCount, 30, 175);
+  g.fillText(won ? 'LEVEL CLEAR!' : 'WAVE ' + wave + ' / ' + CFG.level.maxWaves + '   ·   ENEMIES ' + aliveCount, 30, 175);
   g.fillStyle = '#5a5a5a'; g.font = '26px Fredoka, sans-serif';
   g.fillText(msgT > 0 ? currentMsg : '', 30, 220);
   vrPanelTex.needsUpdate = true;
@@ -991,8 +992,9 @@ function showMsg(text, secs) {
 function updateHUD(dt) {
   if (msgT > 0) { msgT -= dt; if (msgT <= 0) document.getElementById('msg').style.opacity = 0; }
   document.getElementById('hpFill').style.width = (hp / CFG.player.maxHP * 100) + '%';
-  document.getElementById('info').textContent =
-    'WAVE ' + wave + '  •  ENEMIES ' + aliveCount;
+  document.getElementById('info').textContent = won
+    ? 'LEVEL CLEAR!  \u2013  fire to play again'
+    : 'WAVE ' + wave + ' / ' + CFG.level.maxWaves + '  •  ENEMIES ' + aliveCount;
   if (renderer.xr.isPresenting) {
     vrPanelTimer -= dt;
     if (vrPanelTimer <= 0) { vrPanelTimer = 0.25; drawVRPanel(); }
@@ -1486,6 +1488,13 @@ function startWave(n) {
 
 // ---------------- per-frame combat update ----------------
 function updateCombat(dt, inp) {
+  // when the level is won, keep projectiles/particles animating; fire restarts
+  if (won) {
+    if (fireCd > 0) fireCd -= dt;
+    updateShells(dt); updateEShells(dt); updateBullets(dt); updateParticles(dt);
+    if (inp.fire && fireCd <= 0) restartLevel();
+    return;
+  }
   if (fireCd > 0) fireCd -= dt;
   if (inp.fire && fireCd <= 0 && !dead) {
     fireShell();
@@ -1536,10 +1545,43 @@ function sfxClunk() { tone('square', 420, 240, 0.07, 0.28); }
 function checkWaveClear() {
   if (aliveCount <= 0 && waveActive) {
     waveActive = false;
-    nextWaveT = 5;
-    showMsg('WAVE ' + wave + ' CLEAR!', 3);
-    sfxWave();
+    if (wave >= CFG.level.maxWaves) {
+      winLevel();
+    } else {
+      nextWaveT = 5;
+      showMsg('WAVE ' + wave + ' CLEAR!', 3);
+      sfxWave();
+    }
   }
+}
+
+function winLevel() {
+  won = true;
+  fireCd = 2.0;   // input lockout before "fire to play again" is accepted
+  showMsg('LEVEL CLEAR!  \u2013  fire to play again', 999);
+  // triumphant little fanfare
+  if (AC) [523, 659, 784, 1047, 1319].forEach((f, i) =>
+    setTimeout(() => tone('square', f, f, 0.22, 0.25), i * 130));
+  // celebratory plastic confetti over the tank
+  V.copy(hull.position); V.y = 6;
+  [0xe23b3b, 0xf7c948, 0x4caf50, 0x2f6fd0, 0xe88a2f].forEach(c => spawnBurst(V, c, 10, 12, 0.5));
+}
+
+function restartLevel() {
+  // clear any remaining enemies + projectiles
+  for (let i = 0; i < soldiers.length; i++) if (soldiers[i].alive) scene.remove(soldiers[i].g);
+  for (let i = 0; i < etanks.length; i++) if (etanks[i].alive) scene.remove(etanks[i].g);
+  soldiers = []; etanks = [];
+  for (let i = 0; i < shellPool.length; i++) shellPool[i].m.visible = false;
+  for (let i = 0; i < eshellPool.length; i++) eshellPool[i].m.visible = false;
+  for (let i = 0; i < bulletPool.length; i++) bulletPool[i].m.visible = false;
+  won = false; dead = false;
+  hp = CFG.player.maxHP;
+  hull.position.set(SPAWN.x, 0, SPAWN.z);
+  hullYaw = SPAWN.yaw; hull.rotation.y = hullYaw;
+  speed = 0;
+  wave = 0; waveActive = false; nextWaveT = 0;
+  startWave(1);
 }
 
 function buildETank(x, z) {
