@@ -30,6 +30,7 @@
     --gs-accent:  #d3dae6;
     --cd-accent:  #a9dcff;
     --tb-accent:  #4d86ff;
+    --rr-accent:  #f0a63c;
   }
 
   *{ box-sizing: border-box; }
@@ -289,6 +290,7 @@
   .cabinet.gs{  --accent: var(--gs-accent); }
   .cabinet.cd{  --accent: var(--cd-accent); }
   .cabinet.tb{  --accent: var(--tb-accent); }
+  .cabinet.rr{  --accent: var(--rr-accent); }
 
   /* ---------- Footer ---------- */
   footer{
@@ -1330,10 +1332,215 @@
         <div class="play"><span>Roll Out</span><span class="arrow">▶</span></div>
       </a>
 
+      <!-- ============ REID'S RED PLANET ROVER ============ -->
+      <a class="cabinet rr" href="RRR-1.html" aria-label="Play Reid's Red Planet Rover">
+        <div class="screen">
+          <span class="badge">VR READY</span>
+          <svg viewBox="0 0 400 250" role="img" aria-label="A Mars rover with a party hat feeding a multi-mouthed martian near a birthday base camp">
+            <defs>
+              <linearGradient id="rrSky" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#b85a3e"/>
+                <stop offset="55%" stop-color="#dd8f5f"/>
+                <stop offset="100%" stop-color="#f2c197"/>
+              </linearGradient>
+              <linearGradient id="rrGround" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#c56a3f"/>
+                <stop offset="100%" stop-color="#8f4526"/>
+              </linearGradient>
+              <radialGradient id="rrSun" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#fff3df"/>
+                <stop offset="100%" stop-color="#ffd9a8"/>
+              </radialGradient>
+              <radialGradient id="rrMarker" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#ffe0a0"/>
+                <stop offset="100%" stop-color="#f0a63c" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+
+            <rect width="400" height="140" fill="url(#rrSky)"/>
+
+            <!-- pale sun and two moons -->
+            <circle cx="322" cy="42" r="19" fill="url(#rrSun)"/>
+            <circle cx="72" cy="34" r="8" fill="#d9c3ac" opacity="0.8"/>
+            <circle cx="70" cy="32" r="8" fill="#c7ad92" opacity="0.4"/>
+            <circle cx="150" cy="48" r="4.5" fill="#d0b89e" opacity="0.75"/>
+
+            <!-- distant mesas -->
+            <g fill="#a9522f" opacity="0.85">
+              <polygon points="0,140 0,112 30,108 54,116 60,140"/>
+              <polygon points="110,140 118,104 150,102 160,116 168,140"/>
+              <polygon points="352,140 356,110 390,108 400,120 400,140"/>
+            </g>
+
+            <!-- ground -->
+            <rect y="140" width="400" height="110" fill="url(#rrGround)"/>
+            <!-- craters -->
+            <g fill="none" stroke="#7a3a20" stroke-width="2" opacity="0.55">
+              <ellipse cx="70" cy="228" rx="34" ry="9"/>
+              <ellipse cx="330" cy="222" rx="26" ry="7"/>
+            </g>
+            <!-- scattered rocks -->
+            <g fill="#a1512e">
+              <polygon points="176,236 184,230 192,236 188,242 180,242"/>
+              <polygon points="286,240 293,235 300,240 297,245 289,245"/>
+            </g>
+
+            <!-- birthday base camp: prominent banner, flags, and space station -->
+            <g>
+              <!-- full-width party flags (bunting swag) -->
+              <path d="M18,96 Q200,128 382,96" fill="none" stroke="#5a2a18" stroke-width="1.2"/>
+              <polygon points="12,96 24,96 18,108" fill="#ff5b8a"/>
+              <polygon points="42,101 54,101 48,113" fill="#ffd24d"/>
+              <polygon points="73,105 85,105 79,117" fill="#4d86ff"/>
+              <polygon points="103,108 115,108 109,120" fill="#9ee23f"/>
+              <polygon points="133,110 145,110 139,122" fill="#ff8a3d"/>
+              <polygon points="164,112 176,112 170,124" fill="#ff5b8a"/>
+              <polygon points="194,112 206,112 200,124" fill="#ffd24d"/>
+              <polygon points="224,112 236,112 230,124" fill="#4d86ff"/>
+              <polygon points="255,110 267,110 261,122" fill="#9ee23f"/>
+              <polygon points="285,108 297,108 291,120" fill="#ff8a3d"/>
+              <polygon points="315,105 327,105 321,117" fill="#ff5b8a"/>
+              <polygon points="346,101 358,101 352,113" fill="#ffd24d"/>
+              <polygon points="376,96 388,96 382,108" fill="#4d86ff"/>
+
+              <!-- big HAPPY BIRTHDAY REID banner -->
+              <line x1="54" y1="64" x2="50" y2="52" stroke="#5a2a18" stroke-width="1"/>
+              <line x1="346" y1="64" x2="350" y2="52" stroke="#5a2a18" stroke-width="1"/>
+              <polygon points="40,63 54,63 54,87 40,87 48,75" fill="#2f5aa8"/>
+              <polygon points="360,63 346,63 346,87 360,87 352,75" fill="#2f5aa8"/>
+              <rect x="52" y="62" width="296" height="26" rx="3" fill="#3f78d6" stroke="#285aa8" stroke-width="1.5"/>
+              <rect x="52" y="64" width="296" height="4" rx="2" fill="#6a9ae8" opacity="0.7"/>
+              <text x="200" y="81" font-family="'Bungee',sans-serif" font-size="13" letter-spacing="0.5" fill="#fff4d6" text-anchor="middle">HAPPY BIRTHDAY REID</text>
+
+              <!-- space station -->
+              <!-- landing legs -->
+              <g stroke="#6c7686" stroke-width="3" stroke-linecap="round">
+                <line x1="318" y1="132" x2="308" y2="140"/>
+                <line x1="356" y1="132" x2="366" y2="140"/>
+              </g>
+              <!-- solar panel on an arm -->
+              <line x1="312" y1="126" x2="296" y2="122" stroke="#8f99a8" stroke-width="2"/>
+              <g transform="rotate(-12 288 120)">
+                <rect x="276" y="112" width="18" height="16" fill="#274a86" stroke="#5f6879" stroke-width="1"/>
+                <line x1="285" y1="112" x2="285" y2="128" stroke="#4a6fae" stroke-width="0.8"/>
+                <line x1="276" y1="120" x2="294" y2="120" stroke="#4a6fae" stroke-width="0.8"/>
+              </g>
+              <!-- habitat module -->
+              <rect x="310" y="116" width="52" height="24" rx="9" fill="#d3dae6" stroke="#9aa3b0" stroke-width="1.5"/>
+              <!-- dome -->
+              <path d="M316,117 A20,20 0 0 1 356,117 Z" fill="#e4e9f0" stroke="#9aa3b0" stroke-width="1.5"/>
+              <ellipse cx="330" cy="105" rx="7" ry="3" fill="#ffffff" opacity="0.6"/>
+              <!-- viewport -->
+              <circle cx="336" cy="126" r="7" fill="#7fe6ff" stroke="#6c7686" stroke-width="1.5"/>
+              <circle cx="333" cy="123" r="2" fill="#ffffff" opacity="0.8"/>
+              <!-- antenna dish -->
+              <line x1="336" y1="97" x2="336" y2="86" stroke="#8f99a8" stroke-width="2"/>
+              <ellipse cx="332" cy="83" rx="6" ry="3.5" fill="#c2ccdb" stroke="#8f99a8" stroke-width="1" transform="rotate(-32 332 83)"/>
+              <circle cx="336" cy="86" r="1.6" fill="#ff5b5b"/>
+              <!-- flag on a pole -->
+              <line x1="360" y1="118" x2="360" y2="94" stroke="#8f99a8" stroke-width="2"/>
+              <polygon points="360,94 378,99 360,104" fill="#ff5b8a"/>
+
+              <!-- large REID sign out front -->
+              <line x1="308" y1="152" x2="308" y2="164" stroke="#7a5230" stroke-width="3"/>
+              <line x1="364" y1="152" x2="364" y2="164" stroke="#7a5230" stroke-width="3"/>
+              <rect x="300" y="142" width="72" height="17" rx="3" fill="#fff4d6" stroke="#e0a63c" stroke-width="2"/>
+              <text x="336" y="155" font-family="'Bungee',sans-serif" font-size="11" fill="#d1622a" text-anchor="middle">REID</text>
+            </g>
+
+            <!-- glowing dig-site marker -->
+            <g>
+              <ellipse cx="205" cy="216" rx="26" ry="9" fill="url(#rrMarker)"/>
+              <ellipse cx="205" cy="216" rx="15" ry="5" fill="none" stroke="#ffd98a" stroke-width="1.5" opacity="0.8"/>
+              <polygon points="205,198 211,210 205,214 199,210" fill="#7fe6ff"/>
+              <polygon points="205,198 205,214 211,210" fill="#4fc9e8"/>
+            </g>
+
+            <!-- multi-mouthed martian -->
+            <g transform="translate(250,192)">
+              <ellipse cx="0" cy="20" rx="14" ry="3" fill="#5a2f5e" opacity="0.4"/>
+              <ellipse cx="0" cy="0" rx="17" ry="19" fill="#8a5cd0"/>
+              <ellipse cx="1" cy="4" rx="11" ry="12" fill="#a97ee0"/>
+              <!-- lime spots -->
+              <circle cx="-9" cy="-6" r="2.4" fill="#9ee23f"/>
+              <circle cx="8" cy="-9" r="2" fill="#9ee23f"/>
+              <circle cx="10" cy="4" r="1.8" fill="#9ee23f"/>
+              <!-- eye stalks -->
+              <line x1="-5" y1="-16" x2="-8" y2="-26" stroke="#8a5cd0" stroke-width="2.5"/>
+              <line x1="5" y1="-16" x2="8" y2="-26" stroke="#8a5cd0" stroke-width="2.5"/>
+              <circle cx="-8" cy="-28" r="3.4" fill="#fff"/><circle cx="-8" cy="-28" r="1.5" fill="#241018"/>
+              <circle cx="8" cy="-28" r="3.4" fill="#fff"/><circle cx="8" cy="-28" r="1.5" fill="#241018"/>
+              <!-- three open mouths facing the rover -->
+              <g fill="#3a1338">
+                <ellipse cx="-11" cy="2" rx="3" ry="4"/>
+                <ellipse cx="-7" cy="12" rx="2.6" ry="3.4"/>
+                <ellipse cx="-13" cy="-8" rx="2.4" ry="3"/>
+              </g>
+              <!-- feet -->
+              <ellipse cx="-7" cy="19" rx="4" ry="3" fill="#6f43b0"/>
+              <ellipse cx="7" cy="19" rx="4" ry="3" fill="#6f43b0"/>
+            </g>
+
+            <!-- food pellets arcing from the rover to the martian -->
+            <path d="M170,172 Q210,150 238,188" fill="none" stroke="#9ee23f" stroke-width="1.5" stroke-dasharray="1 5" opacity="0.7"/>
+            <circle cx="196" cy="156" r="3" fill="#c6f06a" stroke="#6db82a" stroke-width="0.8"/>
+            <circle cx="220" cy="162" r="2.4" fill="#c6f06a" stroke="#6db82a" stroke-width="0.8"/>
+
+            <!-- the rover (facing right) -->
+            <g>
+              <!-- wheels -->
+              <g>
+                <circle cx="82" cy="200" r="10" fill="#2b2f38" stroke="#14161c" stroke-width="1.5"/>
+                <circle cx="112" cy="201" r="10" fill="#2b2f38" stroke="#14161c" stroke-width="1.5"/>
+                <circle cx="142" cy="200" r="10" fill="#2b2f38" stroke="#14161c" stroke-width="1.5"/>
+                <circle cx="82" cy="200" r="3.5" fill="#f0a63c"/>
+                <circle cx="112" cy="201" r="3.5" fill="#f0a63c"/>
+                <circle cx="142" cy="200" r="3.5" fill="#f0a63c"/>
+              </g>
+              <!-- rocker suspension -->
+              <path d="M82,200 L104,186 L142,200" fill="none" stroke="#8f99a8" stroke-width="3"/>
+              <!-- body deck -->
+              <rect x="74" y="174" width="78" height="16" rx="4" fill="#d3dae6" stroke="#9aa3b0" stroke-width="1.5"/>
+              <rect x="80" y="177" width="66" height="5" rx="2" fill="#8a94a4"/>
+              <rect x="86" y="184" width="20" height="4" fill="#6c7686"/>
+              <!-- gloss -->
+              <path d="M80,178 Q112,174 146,178" stroke="#ffffff" stroke-width="1.5" fill="none" opacity="0.5"/>
+
+              <!-- mast + camera head with a party hat -->
+              <line x1="120" y1="174" x2="122" y2="150" stroke="#8f99a8" stroke-width="3"/>
+              <rect x="118" y="146" width="12" height="8" rx="2" fill="#6c7686"/>
+              <circle cx="128" cy="150" r="2.2" fill="#7fe6ff"/>
+              <!-- party hat -->
+              <polygon points="124,146 116,130 132,130" fill="#ff5b8a"/>
+              <polygon points="124,146 120,138 128,138" fill="#ffd24d"/>
+              <circle cx="124" cy="129" r="2.4" fill="#4d86ff"/>
+
+              <!-- science drill arm (front, angling down) -->
+              <line x1="150" y1="186" x2="166" y2="198" stroke="#7c8698" stroke-width="4" stroke-linecap="round"/>
+              <circle cx="167" cy="200" r="3.4" fill="#b6bcc6" stroke="#5f6879" stroke-width="1"/>
+              <line x1="167" y1="203" x2="167" y2="208" stroke="#5f6879" stroke-width="2"/>
+
+              <!-- food cannon (front, angling up) -->
+              <rect x="146" y="168" width="20" height="7" rx="3" fill="#b6bcc6" stroke="#5f6879" stroke-width="1" transform="rotate(-24 146 171)"/>
+              <circle cx="150" cy="177" r="5" fill="#9aa3b0"/>
+              <circle cx="168" cy="163" r="2.6" fill="#f0a63c"/>
+            </g>
+          </svg>
+        </div>
+        <div class="strip">
+          <h2>Reid's Red Planet Rover</h2>
+        </div>
+        <div class="body">
+          <p>Cruise a six-wheeled rover across an open Mars built for Reid's birthday. Dig up silly samples with the science arm, lob snacks to hungry multi-mouthed martians with the food cannon, and roam the landmarks — no timers, no losing. Stick around for the birthday surprise.</p>
+          <div class="meta">MARS SANDBOX · VR + BROWSER · FREE-ROAM</div>
+        </div>
+        <div class="play"><span>Explore Mars</span><span class="arrow">▶</span></div>
+      </a>
+
     </main>
 
     <footer>
-      <span class="pulse">▸</span> 9 games loaded · built for headsets and browsers
+      <span class="pulse">▸</span> 10 games loaded · built for headsets and browsers
     </footer>
   </div>
 </body>

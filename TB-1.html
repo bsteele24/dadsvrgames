@@ -166,6 +166,7 @@ let scene, camera, renderer, clock, sun;
 let hull, turret, barrelPivot, muzzle, rig, treadTex, flagMesh, muzzleFlash, reticle;
 let vignette = null, vrPanel = null, vrPanelTex = null, vrPanelCtx = null, vrPanelTimer = 0;
 let lookYaw = 0, lookPitch = 0.05;       // desktop/mobile look (local to hull)
+let xrControllers = [], rightController = null, aimRay = null;
 let speed = 0, hullYaw = 0;
 let hp = CFG.player.maxHP, lastHitT = -99, dead = false, respawnT = 0;
 let fireCd = 0, recoil = 0, flashT = 0;
@@ -916,8 +917,9 @@ function getInput() {
         else if (g.axes.length >= 2) { ax = g.axes[0]; ay = g.axes[1]; }
         if (src.handedness === 'left') { throttle = -ay; steer = ax; }
         else if (src.handedness === 'right') {
-          if (Math.abs(ax) > Math.abs(steer)) steer = ax;   // right stick can steer too
-          if (g.buttons[0] && g.buttons[0].pressed) fire = true;
+          // right controller aims the turret (see updateTurret) and fires
+          if (g.buttons[0] && g.buttons[0].pressed) fire = true;   // trigger
+          if (g.buttons[1] && g.buttons[1].pressed) fire = true;   // grip as backup
         }
       }
     }
@@ -969,9 +971,12 @@ function drive(dt, inp) {
   treadTex.offset.y -= speed * dt * 0.28;
 }
 
-// ---------------- turret head-follow ----------------
+// ---------------- turret aim ----------------
+// VR: turret follows the RIGHT CONTROLLER (head is free to look around).
+// Desktop/mobile: turret follows the look direction (mouse / drag).
 function updateTurret(dt) {
-  V.set(0, 0, -1).applyQuaternion(camera.quaternion);
+  const aimSrc = (renderer.xr.isPresenting && rightController) ? rightController : camera;
+  V.set(0, 0, -1).applyQuaternion(aimSrc.quaternion);
   const yawL = Math.atan2(-V.x, -V.z);
   const pitchL = Math.asin(clamp(V.y, -1, 1));
   const maxStep = CFG.turret.slew * dt;
@@ -1002,6 +1007,45 @@ function updateHUD(dt) {
 }
 
 // ---------------- VR session ----------------
+// ---------------- XR controllers ----------------
+function makeAimRay() {
+  const geo = new THREE.CylinderGeometry(0.05, 0.05, 60, 6);
+  geo.rotateX(Math.PI / 2);      // align cylinder axis to Z
+  geo.translate(0, 0, -30);      // extend forward along -Z from the controller
+  const mat = new THREE.MeshBasicMaterial({ color: 0x66ccff, transparent: true, opacity: 0.45, depthWrite: false });
+  const ray = new THREE.Mesh(geo, mat);
+  ray.renderOrder = 6;
+  // little emitter bead at the controller tip
+  const bead = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8),
+    new THREE.MeshBasicMaterial({ color: 0xbfefff }));
+  ray.add(bead);
+  return ray;
+}
+
+function setupXRControllers() {
+  for (let i = 0; i < 2; i++) {
+    const c = renderer.xr.getController(i);
+    rig.add(c);                  // parent to the seat rig so aim is in hull-local space
+    c.userData.hand = null;
+    c.addEventListener('connected', (e) => {
+      const h = e.data && e.data.handedness;
+      c.userData.hand = h;
+      if (h === 'right') {
+        rightController = c;
+        if (!aimRay) aimRay = makeAimRay();
+        if (aimRay.parent !== c) c.add(aimRay);
+        aimRay.visible = true;
+      }
+    });
+    c.addEventListener('disconnected', () => {
+      if (rightController === c) rightController = null;
+      if (aimRay && aimRay.parent === c) aimRay.visible = false;
+      c.userData.hand = null;
+    });
+    xrControllers.push(c);
+  }
+}
+
 function setupVR() {
   const btn = document.getElementById('vrBtn');
   if (navigator.xr && navigator.xr.isSessionSupported) {
@@ -1037,7 +1081,7 @@ function fillControls() {
   document.getElementById('controls').innerHTML =
     '<b>Desktop:</b> W/S drive · A/D turn · mouse aims · click or space fires<br>' +
     '<b>Mobile:</b> left stick drives · drag right side to look · FIRE button<br>' +
-    '<b>VR (Quest):</b> left stick drives · look to aim · trigger fires';
+    '<b>VR (Quest):</b> left stick drives · point right controller to aim · trigger fires';
 }
 
 function startGame() {
@@ -1091,6 +1135,7 @@ function init() {
   buildRoom();
   buildTank();
   initParticles();
+  setupXRControllers();
   setupInput();
   setupVR();
   fillControls();

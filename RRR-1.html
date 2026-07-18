@@ -1,0 +1,1788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Reid's Red Planet Rover</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#1a0a05;font-family:'Segoe UI',system-ui,sans-serif;touch-action:none;-webkit-user-select:none;user-select:none}
+canvas{display:block}
+#hud{position:fixed;top:10px;left:10px;color:#ffe8d0;text-shadow:0 1px 3px #000;z-index:5;pointer-events:none}
+#log{font-size:15px;font-weight:600;background:rgba(40,15,5,.55);padding:6px 12px;border-radius:10px;border:1px solid rgba(255,180,110,.35);display:inline-block}
+#tool{margin-top:6px;font-size:12px;background:rgba(40,15,5,.55);display:block;width:fit-content;padding:4px 10px;border-radius:8px;color:#ffd27a}
+#toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:rgba(30,10,4,.85);color:#aef0a0;font-weight:700;font-size:16px;padding:9px 18px;border-radius:12px;border:1px solid rgba(255,200,140,.4);opacity:0;transition:opacity .3s;z-index:7;pointer-events:none;max-width:82vw;text-align:center}
+#big{position:fixed;top:32%;left:50%;transform:translate(-50%,-50%);color:#ffd94d;font-weight:900;font-size:clamp(26px,6vw,58px);text-shadow:0 3px 10px #000,0 0 30px rgba(255,150,50,.7);opacity:0;transition:opacity .5s;z-index:8;pointer-events:none;text-align:center;width:92vw}
+#joy{position:fixed;left:18px;bottom:22px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.25);z-index:6;display:none}
+#knob{position:absolute;left:36px;top:36px;width:48px;height:48px;border-radius:50%;background:rgba(255,190,120,.55);border:2px solid rgba(255,255,255,.5);pointer-events:none}
+.mbtn{position:fixed;z-index:6;border-radius:50%;background:rgba(255,140,60,.3);border:2px solid rgba(255,200,150,.55);color:#fff;font-weight:800;display:none;align-items:center;justify-content:center;text-shadow:0 1px 2px #000}
+#btnAct{right:22px;bottom:34px;width:88px;height:88px;font-size:15px}
+#btnSwap{right:128px;bottom:50px;width:60px;height:60px;font-size:11px}
+#btnReset{right:34px;bottom:140px;width:48px;height:48px;font-size:10px;background:rgba(120,160,255,.28)}
+#overlay{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;background:radial-gradient(ellipse at 50% 35%,#7a2f14 0%,#3a1408 60%,#1a0a05 100%);color:#ffe8d0;padding:20px}
+#title{font-size:clamp(30px,7vw,64px);font-weight:900;color:#ffd94d;text-shadow:0 4px 0 #a03516,0 8px 22px #000;letter-spacing:1px;margin:0 0 6px}
+#subtitle{font-size:clamp(14px,3vw,20px);color:#ffc9a0;margin:0 0 22px;font-weight:600}
+#controls{font-size:clamp(12px,2.6vw,15px);color:#f2d8c2;line-height:1.7;background:rgba(0,0,0,.3);border:1px solid rgba(255,180,110,.3);border-radius:14px;padding:14px 22px;max-width:560px;margin-bottom:26px}
+#controls b{color:#ffd27a}
+.bigbtn{font-size:20px;font-weight:800;padding:14px 42px;border-radius:14px;border:none;cursor:pointer;margin:6px;color:#fff;box-shadow:0 5px 0 rgba(0,0,0,.4)}
+#btnStart{background:linear-gradient(#ff9040,#d85a1c)}
+#btnVR{background:linear-gradient(#5a8fe0,#2b5fb0);display:none}
+</style>
+</head>
+<body>
+<div id="hud"><span id="log">Samples 0/8 · Fed 0/6 · Sites 0/3</span><span id="tool">TOOL: SCOOP ARM</span></div>
+<div id="toast"></div>
+<div id="big"></div>
+<div id="joy"><div id="knob"></div></div>
+<div id="btnAct" class="mbtn">ACTION</div>
+<div id="btnSwap" class="mbtn">SWAP</div>
+<div id="btnReset" class="mbtn">RESET</div>
+<div id="overlay">
+<h1 id="title">REID'S RED PLANET ROVER</h1>
+<p id="subtitle">Dig up weird samples · Feed hungry martians · Discover the Red Planet</p>
+<div id="controls">
+<b>Desktop:</b> W/S drive, A/D turn · hold mouse or Space = dig / fire · Tab = swap tool · R = reset<br>
+<b>Mobile:</b> left joystick drives · ACTION digs/fires · SWAP changes tool · drag to look<br>
+<b>VR:</b> left stick drives · right controller aims · trigger digs/fires · A/B swaps · left grip resets
+</div>
+<div>
+<button id="btnStart" class="bigbtn">START MISSION</button>
+<button id="btnVR" class="bigbtn">ENTER VR</button>
+</div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
+/* ============================================================
+   REID'S RED PLANET ROVER  (RRR-1)
+   Free-roam Mars sandbox: dig samples, feed multi-mouthed
+   martians with the food cannon, discover landmarks, then
+   celebrate with a birthday finale at base camp.
+
+   Desktop: W/S or arrows drive, A/D turn, hold mouse = fire/dig
+            (drag also looks), Space/E = fire/dig, Tab/Q = swap
+            tool, R = reset rover to base.
+   Mobile:  left joystick drives, ACTION button = fire/dig,
+            SWAP button, drag upper screen to look.
+   VR:      left stick drives/turns, right controller aims,
+            right trigger = fire/dig, A/B = swap tool,
+            left grip = reset rover.
+   ============================================================ */
+
+const CFG = {
+  MAP_SIZE: 300,          // world is MAP_SIZE x MAP_SIZE meters
+  EDGE_PAD: 6,            // keep rover this far from map edge
+  ROVER_SPEED: 13,        // top speed m/s
+  ROVER_ACCEL: 16,        // accel toward target speed
+  ROVER_TURN: 1.9,        // rad/s turn rate
+  CAM_DIST: 11,           // chase camera distance
+  CAM_HEIGHT: 4.6,
+  MARTIAN_COUNT: 7,       // hungry martians roaming at once
+  MARTIAN_SPEED: 3.4,
+  MARTIAN_CHASE_DIST: 45, // they come running from this far
+  MARTIAN_NEAR: 6,        // within this range they slow the rover
+  MARTIAN_SLOW_EACH: 0.15,// slow per nearby hungry martian
+  MARTIAN_SLOW_MAX: 0.4,  // never slower than 60% speed
+  MARTIANS_TO_FEED: 6,    // for the sample log
+  DROP_CHANCE: 0.35,      // chance a fed martian drops a crystal
+  DIG_SITES: 8,
+  DIG_TIME: 1.1,          // seconds of holding to dig
+  DIG_RANGE: 6,           // how close the rover must be
+  FOOD_SPEED: 24,
+  FOOD_GRAVITY: 12,
+  FOOD_COOLDOWN: 0.32,    // seconds between snacks
+  FOOD_HOMING: 4.5,       // aim-assist strength (party mode!)
+  FOOD_HOMING_RANGE: 15,
+  MOUTH_HIT_R: 0.85,      // generous mouth hitbox
+  LANDMARK_RANGE: 14,
+  FINALE_BURSTS: 25,      // seconds of dense fireworks
+  VOLUME: 0.5
+};
+
+/* ---------- globals ---------- */
+let scene, camera, renderer, dolly, clock, elapsed = 0;
+let camYaw = Math.PI, camPitch = 0.42;
+const isMobile = ('ontouchstart' in window) && (navigator.maxTouchPoints > 0);
+let inVR = false, started = false;
+let samples = 0, fedCount = 0, foundCount = 0, bonusCount = 0;
+let finale = false, cakeGot = false, hudDirty = true;
+const tmpV = null; // placeholder, real vectors created after THREE loads
+let _a, _b, _c;    // scratch vectors, init in boot
+
+function rand(a, b) { return a + Math.random() * (b - a); }
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+function lerp(a, b, t) { return a + (b - a) * t; }
+function dist2d(x1, z1, x2, z2) { return Math.hypot(x1 - x2, z1 - z2); }
+
+/* ---------- terrain ---------- */
+const CRATERS = [
+  { x: 60, z: -50, r: 22, d: 5 },
+  { x: -40, z: 55, r: 16, d: 4 },
+  { x: 92, z: 70, r: 26, d: 6 },
+  { x: -95, z: -75, r: 14, d: 3.5 },
+  { x: 20, z: -105, r: 18, d: 4.5 }
+];
+
+function terrainH(x, z) {
+  let h = Math.sin(x * 0.02) * Math.cos(z * 0.023) * 2.2
+        + Math.sin(x * 0.045 + 1.7) * Math.sin(z * 0.05) * 1.2
+        + Math.sin(x * 0.11) * Math.cos(z * 0.09) * 0.35;
+  // dune field in the +x/+z corner
+  const du = clamp((x - 30) / 40, 0, 1) * clamp((z - 30) / 40, 0, 1);
+  h += du * Math.sin((x + z) * 0.12) * 2.0;
+  // canyon trench along x = -75
+  const cw = Math.abs(x + 75);
+  if (cw < 16) {
+    const t = 1 - cw / 16;
+    const zl = clamp(1 - Math.max(0, Math.abs(z) - 70) / 20, 0, 1);
+    h -= t * t * 7 * zl;
+  }
+  // craters with rims
+  for (let i = 0; i < CRATERS.length; i++) {
+    const c = CRATERS[i];
+    const dd = Math.hypot(x - c.x, z - c.z);
+    if (dd < c.r) h -= c.d * (0.5 + 0.5 * Math.cos(Math.PI * dd / c.r));
+    else if (dd < c.r * 1.25) h += c.d * 0.25 * (1 - (dd - c.r) / (c.r * 0.25));
+  }
+  // flatten base camp
+  const bd = Math.hypot(x, z);
+  if (bd < 26) h *= clamp((bd - 14) / 12, 0, 1);
+  return h;
+}
+
+function buildSky() {
+  const geo = new THREE.SphereGeometry(900, 24, 16);
+  const pos = geo.attributes.position;
+  const cols = new Float32Array(pos.count * 3);
+  const top = new THREE.Color(0xb96a45), bot = new THREE.Color(0xf0b078);
+  const tc = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    const t = clamp(pos.getY(i) / 900 * 0.5 + 0.5, 0, 1);
+    tc.copy(bot).lerp(top, Math.pow(t, 0.55));
+    cols[i * 3] = tc.r; cols[i * 3 + 1] = tc.g; cols[i * 3 + 2] = tc.b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+  const mat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, depthWrite: false, fog: false });
+  const sky = new THREE.Mesh(geo, mat);
+  sky.renderOrder = -3;
+  scene.add(sky);
+  // pale small sun (it's far away on Mars)
+  const sun = new THREE.Mesh(
+    new THREE.CircleGeometry(16, 24),
+    new THREE.MeshBasicMaterial({ color: 0xfff6e8, depthWrite: false, fog: false })
+  );
+  sun.position.set(350, 460, -620);
+  sun.lookAt(0, 0, 0);
+  sun.renderOrder = -2;
+  scene.add(sun);
+  // Phobos: a lumpy potato
+  const pho = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(9, 0),
+    new THREE.MeshBasicMaterial({ color: 0xd9c2a8, depthWrite: false, fog: false })
+  );
+  pho.scale.set(1.4, 0.9, 1);
+  pho.position.set(-500, 380, 300);
+  pho.renderOrder = -2;
+  scene.add(pho);
+  // Deimos: tiny dot
+  const dei = new THREE.Mesh(
+    new THREE.SphereGeometry(4, 10, 8),
+    new THREE.MeshBasicMaterial({ color: 0xcbb79d, depthWrite: false, fog: false })
+  );
+  dei.position.set(420, 300, 480);
+  dei.renderOrder = -2;
+  scene.add(dei);
+}
+
+function buildTerrain() {
+  const seg = 128;
+  const geo = new THREE.PlaneGeometry(CFG.MAP_SIZE, CFG.MAP_SIZE, seg, seg);
+  geo.rotateX(-Math.PI / 2);
+  const pos = geo.attributes.position;
+  const cols = new Float32Array(pos.count * 3);
+  const low = new THREE.Color(0x8f3f1f), high = new THREE.Color(0xcf7a3f);
+  const sand = new THREE.Color(0xd99a5a);
+  const tc = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i);
+    const h = terrainH(x, z);
+    pos.setY(i, h);
+    const t = clamp((h + 6) / 12, 0, 1);
+    tc.copy(low).lerp(high, t);
+    const du = clamp((x - 30) / 40, 0, 1) * clamp((z - 30) / 40, 0, 1);
+    tc.lerp(sand, du * 0.6);
+    const sp = (Math.sin(x * 3.7) * Math.sin(z * 4.1)) * 0.035;
+    cols[i * 3] = clamp(tc.r + sp, 0, 1);
+    cols[i * 3 + 1] = clamp(tc.g + sp, 0, 1);
+    cols[i * 3 + 2] = clamp(tc.b + sp, 0, 1);
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+  geo.computeVertexNormals();
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const mesh = new THREE.Mesh(geo, mat);
+  scene.add(mesh);
+}
+
+function addBlobShadow(parent, r, y) {
+  const m = new THREE.Mesh(
+    new THREE.CircleGeometry(r, 16),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22, depthWrite: false })
+  );
+  m.rotation.x = -Math.PI / 2;
+  m.position.y = (y === undefined) ? 0.12 : y;
+  parent.add(m);
+  return m;
+}
+
+const AVOID = []; // {x,z,r} zones rocks must not spawn in
+function buildRocks() {
+  const geoBig = new THREE.IcosahedronGeometry(1, 0);
+  for (let i = 0; i < 80; i++) {
+    let x, z, ok = false, tries = 0;
+    while (!ok && tries < 20) {
+      tries++;
+      x = rand(-142, 142); z = rand(-142, 142);
+      ok = Math.hypot(x, z) > 28;
+      if (ok) for (let j = 0; j < AVOID.length; j++) {
+        if (dist2d(x, z, AVOID[j].x, AVOID[j].z) < AVOID[j].r) { ok = false; break; }
+      }
+    }
+    if (!ok) continue;
+    const s = rand(0.5, 2.4);
+    const tone = rand(0.75, 1.1);
+    const mat = new THREE.MeshLambertMaterial({
+      color: new THREE.Color(0.55 * tone, 0.32 * tone, 0.2 * tone)
+    });
+    const rock = new THREE.Mesh(geoBig, mat);
+    rock.scale.set(s, s * rand(0.55, 0.8), s * rand(0.8, 1.2));
+    rock.position.set(x, terrainH(x, z) + s * 0.18, z);
+    rock.rotation.set(rand(0, 3), rand(0, 6), rand(0, 3));
+    scene.add(rock);
+  }
+}
+
+/* ---------- text panels (canvas textures) ---------- */
+function makeTextPanel(lines, w, h, opts) {
+  opts = opts || {};
+  const cw = opts.cw || 512, ch = opts.ch || 256;
+  const cv = document.createElement('canvas');
+  cv.width = cw; cv.height = ch;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = opts.bg || 'rgba(30,10,4,0.85)';
+  roundRect(ctx, 0, 0, cw, ch, opts.radius === undefined ? 28 : opts.radius);
+  ctx.fill();
+  if (opts.border) {
+    ctx.strokeStyle = opts.border; ctx.lineWidth = 8;
+    roundRect(ctx, 4, 4, cw - 8, ch - 8, 24); ctx.stroke();
+  }
+  ctx.fillStyle = opts.fg || '#ffe8d0';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const fs = opts.fontSize || 56;
+  ctx.font = 'bold ' + fs + 'px sans-serif';
+  const arr = Array.isArray(lines) ? lines : [lines];
+  const lh = fs * 1.25;
+  const y0 = ch / 2 - (arr.length - 1) * lh / 2;
+  for (let i = 0; i < arr.length; i++) ctx.fillText(arr[i], cw / 2, y0 + i * lh);
+  if (opts.confetti) {
+    for (let i = 0; i < 40; i++) {
+      ctx.fillStyle = 'hsl(' + Math.floor(rand(0, 360)) + ',85%,60%)';
+      ctx.fillRect(rand(10, cw - 10), rand(8, ch - 8), 7, 12);
+    }
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, h),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide })
+  );
+  return mesh;
+}
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+/* ---------- base camp ---------- */
+function buildBase() {
+  const g = new THREE.Group();
+  // landing pad
+  const pad = new THREE.Mesh(
+    new THREE.CircleGeometry(9, 32),
+    new THREE.MeshLambertMaterial({ color: 0x6b4634 })
+  );
+  pad.rotation.x = -Math.PI / 2; pad.position.y = 0.06;
+  g.add(pad);
+  const padRing = new THREE.Mesh(
+    new THREE.RingGeometry(8.2, 9, 32),
+    new THREE.MeshBasicMaterial({ color: 0xffc24b, side: THREE.DoubleSide })
+  );
+  padRing.rotation.x = -Math.PI / 2; padRing.position.y = 0.09;
+  g.add(padRing);
+  // habitat dome
+  const dome = new THREE.Mesh(
+    new THREE.SphereGeometry(6, 24, 14, 0, Math.PI * 2, 0, Math.PI / 2),
+    new THREE.MeshLambertMaterial({ color: 0xe8e2d8 })
+  );
+  dome.position.set(-12, 0, -8);
+  g.add(dome);
+  const door = new THREE.Mesh(
+    new THREE.BoxGeometry(2.6, 3.2, 2.2),
+    new THREE.MeshLambertMaterial({ color: 0xb8b2a8 })
+  );
+  door.position.set(-7.2, 1.6, -4.5);
+  door.rotation.y = 0.5;
+  g.add(door);
+  // antenna
+  const ant = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.08, 0.12, 7, 6),
+    new THREE.MeshLambertMaterial({ color: 0x999999 })
+  );
+  ant.position.set(-12, 9.4, -8);
+  g.add(ant);
+  const dish = new THREE.Mesh(
+    new THREE.SphereGeometry(1.1, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+    new THREE.MeshLambertMaterial({ color: 0xdddddd, side: THREE.DoubleSide })
+  );
+  dish.position.set(-12, 12.6, -8);
+  dish.rotation.x = Math.PI * 0.85;
+  g.add(dish);
+  // crates
+  for (let i = 0; i < 3; i++) {
+    const cr = new THREE.Mesh(
+      new THREE.BoxGeometry(1.4, 1.4, 1.4),
+      new THREE.MeshLambertMaterial({ color: i === 1 ? 0xcc7733 : 0x8899aa })
+    );
+    cr.position.set(6 + i * 1.7, 0.7, -10 + (i % 2));
+    cr.rotation.y = i * 0.5;
+    g.add(cr);
+  }
+  // birthday banner between two poles
+  const poleMat = new THREE.MeshLambertMaterial({ color: 0xcfd4da });
+  for (let s = -1; s <= 1; s += 2) {
+    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 6.4, 8), poleMat);
+    p.position.set(s * 7.5, 3.2, 12);
+    g.add(p);
+  }
+  const banner = makeTextPanel('HAPPY BIRTHDAY REID!', 14, 2.6, {
+    cw: 1024, ch: 190, fontSize: 92, bg: '#c8332b', fg: '#fff3d6',
+    border: '#ffd27a', confetti: true, radius: 20
+  });
+  banner.position.set(0, 5.1, 12);
+  g.add(banner);
+  scene.add(g);
+  AVOID.push({ x: 0, z: 0, r: 30 });
+  return g;
+}
+
+/* ---------- dig sites ---------- */
+const SAMPLE_NAMES = [
+  'Blueberry Geode', 'Ancient Cheese Rock', 'Fizzy Crystal',
+  'Petrified Space Potato', 'Marsberry Fossil', 'Glitter Basalt',
+  'Frozen Soda Core', 'Wiggly Magnet Stone'
+];
+const SITE_POS = [
+  [40, 18], [-55, -30], [82, -72], [-100, 40],
+  [118, 108], [-30, -118], [58, 118], [-128, -42]
+];
+const digSites = [];
+function buildDigSites() {
+  for (let i = 0; i < CFG.DIG_SITES; i++) {
+    const x = SITE_POS[i][0], z = SITE_POS[i][1];
+    const y = terrainH(x, z);
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    // mound
+    const mound = new THREE.Mesh(
+      new THREE.SphereGeometry(1.6, 12, 8),
+      new THREE.MeshLambertMaterial({ color: 0xa4562c })
+    );
+    mound.scale.y = 0.35;
+    g.add(mound);
+    // pulsing ring
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(2.2, 0.1, 8, 28),
+      new THREE.MeshBasicMaterial({ color: 0xffc24b, transparent: true, opacity: 0.9 })
+    );
+    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.25;
+    g.add(ring);
+    // light column
+    const col = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.5, 0.9, 7, 10, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false })
+    );
+    col.position.y = 3.5;
+    g.add(col);
+    // dig progress pillar
+    const pil = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.28, 0.28, 2.4, 10),
+      new THREE.MeshBasicMaterial({ color: 0x7fe36b })
+    );
+    pil.position.y = 0.2; pil.scale.y = 0.001; pil.visible = false;
+    g.add(pil);
+    scene.add(g);
+    digSites.push({ x: x, z: z, group: g, ring: ring, col: col, pil: pil, mound: mound, progress: 0, done: false, name: SAMPLE_NAMES[i] });
+    AVOID.push({ x: x, z: z, r: 7 });
+  }
+}
+
+/* ---------- landmarks ---------- */
+const landmarks = [];
+function addLandmarkGlow(g, r) {
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(r, 0.12, 8, 32),
+    new THREE.MeshBasicMaterial({ color: 0x7ad0ff, transparent: true, opacity: 0.7 })
+  );
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.3;
+  g.add(ring);
+  return ring;
+}
+function buildLandmarks() {
+  // 1) crashed probe
+  {
+    const x = 95, z = -20, y = terrainH(x, z);
+    const g = new THREE.Group(); g.position.set(x, y, z);
+    const cone = new THREE.Mesh(
+      new THREE.ConeGeometry(1.3, 4.2, 10),
+      new THREE.MeshLambertMaterial({ color: 0x9aa4ac })
+    );
+    cone.rotation.z = 1.15; cone.position.y = 0.9;
+    g.add(cone);
+    const panMat = new THREE.MeshLambertMaterial({ color: 0x2b4d8f, side: THREE.DoubleSide });
+    for (let s = -1; s <= 1; s += 2) {
+      const pan = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.06, 1.2), panMat);
+      pan.position.set(s * 1.9, 0.6, 0.8);
+      pan.rotation.set(rand(-0.4, 0.4), rand(0, 1), rand(-0.5, 0.5));
+      g.add(pan);
+    }
+    const scorch = new THREE.Mesh(
+      new THREE.CircleGeometry(3.4, 20),
+      new THREE.MeshBasicMaterial({ color: 0x3a1d10, transparent: true, opacity: 0.55, depthWrite: false })
+    );
+    scorch.rotation.x = -Math.PI / 2; scorch.position.y = 0.1;
+    g.add(scorch);
+    const glow = addLandmarkGlow(g, 4);
+    scene.add(g);
+    landmarks.push({ name: 'The Crashed Probe', x: x, z: z, glow: glow, found: false });
+    AVOID.push({ x: x, z: z, r: 10 });
+  }
+  // 2) ice cave at the canyon's end
+  {
+    const x = -75, z = -88, y = terrainH(x, z);
+    const g = new THREE.Group(); g.position.set(x, y, z);
+    const arch = new THREE.Mesh(
+      new THREE.TorusGeometry(4, 1.1, 8, 18, Math.PI),
+      new THREE.MeshLambertMaterial({ color: 0x8fd8ef })
+    );
+    arch.position.y = 0.2;
+    g.add(arch);
+    for (let i = 0; i < 7; i++) {
+      const c = new THREE.Mesh(
+        new THREE.ConeGeometry(rand(0.25, 0.6), rand(1, 2.6), 6),
+        new THREE.MeshLambertMaterial({ color: 0xbdf0ff, transparent: true, opacity: 0.85 })
+      );
+      const a = rand(0, Math.PI * 2);
+      c.position.set(Math.sin(a) * rand(1.5, 4.5), 0.5, Math.cos(a) * rand(1.5, 4.5));
+      g.add(c);
+    }
+    const glow = addLandmarkGlow(g, 5.5);
+    scene.add(g);
+    landmarks.push({ name: 'The Ice Cave', x: x, z: z, glow: glow, found: false });
+    AVOID.push({ x: x, z: z, r: 10 });
+  }
+  // 3) crater overlook flag ("Reid Peak") on the big crater rim
+  {
+    const x = 70, z = 83, y = terrainH(x, z);
+    const g = new THREE.Group(); g.position.set(x, y, z);
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.08, 0.1, 4.6, 8),
+      new THREE.MeshLambertMaterial({ color: 0xdddddd })
+    );
+    pole.position.y = 2.3;
+    g.add(pole);
+    const flag = makeTextPanel('REID PEAK', 2.6, 1.2, {
+      cw: 512, ch: 220, fontSize: 84, bg: '#2b6fb8', fg: '#ffffff', radius: 12
+    });
+    flag.position.set(1.35, 3.7, 0);
+    g.add(flag);
+    const glow = addLandmarkGlow(g, 3.5);
+    scene.add(g);
+    landmarks.push({ name: 'Reid Peak Overlook', x: x, z: z, glow: glow, found: false });
+    AVOID.push({ x: x, z: z, r: 8 });
+  }
+}
+
+/* ---------- rover ---------- */
+let rover, roverState, wheels = [], scoopArm, drillBit, cannon, cannonBarrel, cannonTip, toolGlow, dashPanel, dashCtx, dashTex;
+function buildRover() {
+  rover = new THREE.Group();
+  const bodyMat = new THREE.MeshLambertMaterial({ color: 0xdde2e6 });
+  const orange = new THREE.MeshLambertMaterial({ color: 0xe07020 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.7, 3.6), bodyMat);
+  body.position.y = 1.0;
+  rover.add(body);
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.64, 0.16, 3.64), orange);
+  stripe.position.y = 1.28;
+  rover.add(stripe);
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.2, 2.8), bodyMat);
+  deck.position.y = 1.45;
+  rover.add(deck);
+  // 6 wheels (model faces +z)
+  const wheelGeo = new THREE.CylinderGeometry(0.55, 0.55, 0.42, 14);
+  wheelGeo.rotateZ(Math.PI / 2);
+  const wheelMat = new THREE.MeshLambertMaterial({ color: 0x24211f });
+  const hubMat = new THREE.MeshLambertMaterial({ color: 0x777777 });
+  for (let sx = -1; sx <= 1; sx += 2) {
+    for (let iz = -1; iz <= 1; iz++) {
+      const w = new THREE.Mesh(wheelGeo, wheelMat);
+      w.position.set(sx * 1.42, 0.55, iz * 1.4);
+      rover.add(w);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.46, 8), hubMat);
+      hub.rotation.z = Math.PI / 2;
+      w.add(hub);
+      wheels.push(w);
+    }
+  }
+  // camera mast at the front
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 1.5, 8), bodyMat);
+  mast.position.set(0.6, 2.2, 1.5);
+  rover.add(mast);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.35, 0.3), bodyMat);
+  head.position.set(0.6, 3.05, 1.5);
+  rover.add(head);
+  const lensMat = new THREE.MeshBasicMaterial({ color: 0x223344 });
+  for (let s = -1; s <= 1; s += 2) {
+    const lens = new THREE.Mesh(new THREE.CircleGeometry(0.09, 10), lensMat);
+    lens.position.set(0.6 + s * 0.14, 3.05, 1.66);
+    rover.add(lens);
+  }
+  // ---- both tools mount at the FRONT of the deck, always visible so the
+  //      rider can see the drill arm stick out ahead and watch the cannon fire.
+  const armMat = new THREE.MeshLambertMaterial({ color: 0xb8bec4 });
+
+  // === science drill arm (front-left) ===
+  scoopArm = new THREE.Group();
+  scoopArm.position.set(-0.72, 1.5, 1.5);
+  // shoulder mount
+  const shoulder = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.3, 0.3, 12), orange);
+  scoopArm.add(shoulder);
+  // upper segment reaching forward
+  const seg1 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 1.5), armMat);
+  seg1.position.set(0, 0.15, 0.75);
+  seg1.rotation.x = 0.15;
+  scoopArm.add(seg1);
+  // elbow joint
+  const elbow = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), orange);
+  elbow.position.set(0, 0.3, 1.5);
+  scoopArm.add(elbow);
+  // forearm angling DOWN toward the ground ahead (the drilling pose)
+  const drillHead = new THREE.Group();
+  drillHead.position.set(0, 0.3, 1.5);
+  drillHead.rotation.x = 1.15; // point down-forward
+  const seg2 = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.17, 1.0), armMat);
+  seg2.position.set(0, 0, 0.5);
+  drillHead.add(seg2);
+  // spinning drill bit (cone) at the tip
+  drillBit = new THREE.Mesh(
+    new THREE.ConeGeometry(0.22, 0.7, 10),
+    new THREE.MeshLambertMaterial({ color: 0xffc24b })
+  );
+  drillBit.rotation.x = Math.PI; // tip forward-down along the forearm
+  drillBit.position.set(0, 0, 1.25);
+  drillHead.add(drillBit);
+  scoopArm.add(drillHead);
+  rover.add(scoopArm);
+
+  // === food cannon on a yaw pivot (front-right) ===
+  cannon = new THREE.Group();
+  cannon.position.set(0.72, 1.55, 1.35);
+  const cannonBase = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.32, 0.28, 12), orange);
+  cannon.add(cannonBase);
+  const hopper = new THREE.Mesh(new THREE.SphereGeometry(0.4, 12, 10), new THREE.MeshLambertMaterial({ color: 0xffb347 }));
+  hopper.position.set(0, 0.4, -0.28);
+  cannon.add(hopper);
+  // a few "food pellets" visible in the open hopper
+  for (let i = 0; i < 3; i++) {
+    const pel = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), new THREE.MeshLambertMaterial({ color: 0xffd24a }));
+    pel.position.set(rand(-0.12, 0.12), 0.62, -0.28 + rand(-0.1, 0.1));
+    cannon.add(pel);
+  }
+  cannonBarrel = new THREE.Group();
+  cannonBarrel.position.set(0, 0.35, 0.1);
+  cannonBarrel.rotation.x = -0.5; // barrel tilts up ~29 deg for a nice lob
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.24, 1.7, 12), new THREE.MeshLambertMaterial({ color: 0xcc3b2f }));
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(0, 0, 0.8);
+  cannonBarrel.add(barrel);
+  const muzzle = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.06, 8, 14), new THREE.MeshLambertMaterial({ color: 0xffd27a }));
+  muzzle.position.set(0, 0, 1.6);
+  cannonBarrel.add(muzzle);
+  cannonTip = new THREE.Object3D();
+  cannonTip.position.set(0, 0, 1.75);
+  cannonBarrel.add(cannonTip);
+  cannon.add(cannonBarrel);
+  rover.add(cannon);
+
+  // active-tool highlight ring that sits beneath whichever tool is selected
+  toolGlow = new THREE.Mesh(
+    new THREE.TorusGeometry(0.42, 0.06, 8, 20),
+    new THREE.MeshBasicMaterial({ color: 0x7fe36b })
+  );
+  toolGlow.rotation.x = -Math.PI / 2;
+  toolGlow.position.set(-0.72, 1.38, 1.5);
+  rover.add(toolGlow);
+  addBlobShadow(rover, 2.1);
+  scene.add(rover);
+  roverState = { x: 0, z: 14, yaw: Math.PI, speed: 0, tool: 'scoop', cool: 0, digSnd: 0 };
+}
+
+function resetRover() {
+  roverState.x = 0; roverState.z = 14; roverState.yaw = Math.PI; roverState.speed = 0;
+  camYaw = Math.PI;
+  toast('Rover reset to base camp');
+}
+
+function swapTool() {
+  roverState.tool = (roverState.tool === 'scoop') ? 'cannon' : 'scoop';
+  // both tools stay visible; the glow ring marks which one is active
+  if (roverState.tool === 'scoop') {
+    toolGlow.position.set(-0.72, 1.38, 1.5);
+    toolGlow.material.color.set(0x7fe36b);
+  } else {
+    toolGlow.position.set(0.72, 1.4, 1.35);
+    toolGlow.material.color.set(0xff8a3c);
+  }
+  sfxClick();
+  hudDirty = true;
+}
+
+/* ---------- martians ---------- */
+const martians = [];
+function makeMartian(x, z) {
+  const g = new THREE.Group();
+  const hue = Math.random();
+  const bodyCol = new THREE.Color().setHSL(hue, 0.72, 0.55);
+  const body = new THREE.Mesh(
+    new THREE.SphereGeometry(1.1, 16, 12),
+    new THREE.MeshLambertMaterial({ color: bodyCol })
+  );
+  body.scale.y = 1.25;
+  body.position.y = 1.5;
+  g.add(body);
+  // legs
+  const legMat = new THREE.MeshLambertMaterial({ color: bodyCol.clone().offsetHSL(0, 0, -0.15) });
+  const legs = [];
+  for (let i = 0; i < 4; i++) {
+    const a = i / 4 * Math.PI * 2 + 0.4;
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.8, 6), legMat);
+    leg.position.set(Math.sin(a) * 0.6, 0.4, Math.cos(a) * 0.6);
+    g.add(leg);
+    legs.push(leg);
+  }
+  // eye stalks (2-3 googly eyes on top)
+  const nEyes = 2 + Math.floor(Math.random() * 2);
+  for (let i = 0; i < nEyes; i++) {
+    const a = (i / nEyes) * Math.PI * 2 + rand(0, 1);
+    const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.55, 6), legMat);
+    stalk.position.set(Math.sin(a) * 0.35, 2.95, Math.cos(a) * 0.35);
+    stalk.rotation.set(rand(-0.3, 0.3), 0, rand(-0.3, 0.3));
+    g.add(stalk);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.19, 10, 8), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+    eye.position.set(stalk.position.x, 3.28, stalk.position.z);
+    g.add(eye);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), new THREE.MeshBasicMaterial({ color: 0x111111 }));
+    pupil.position.set(stalk.position.x, 3.3, stalk.position.z + 0.13);
+    g.add(pupil);
+  }
+  // mouths around the body: 2-4, each needs one snack
+  const nMouths = 2 + Math.floor(Math.random() * 3);
+  const mouths = [];
+  for (let i = 0; i < nMouths; i++) {
+    const a = i / nMouths * Math.PI * 2 + rand(-0.3, 0.3);
+    const my = rand(1.2, 2.0);
+    const mg = new THREE.Group();
+    mg.position.set(Math.sin(a) * 1.02, my, Math.cos(a) * 1.02);
+    mg.lookAt(Math.sin(a) * 5, my, Math.cos(a) * 5);
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.3, 0.09, 8, 16),
+      new THREE.MeshLambertMaterial({ color: 0xf5e6c8 })
+    );
+    mg.add(ring);
+    const inner = new THREE.Mesh(
+      new THREE.CircleGeometry(0.27, 12),
+      new THREE.MeshBasicMaterial({ color: 0x5c1414 })
+    );
+    inner.position.z = -0.02;
+    mg.add(inner);
+    g.add(mg);
+    mouths.push({ group: mg, ring: ring, inner: inner, fed: false });
+  }
+  addBlobShadow(g, 1.2);
+  const y = terrainH(x, z);
+  g.position.set(x, y, z);
+  scene.add(g);
+  return {
+    group: g, body: body, legs: legs, mouths: mouths,
+    x: x, z: z, dir: rand(0, Math.PI * 2), seed: rand(0, 100),
+    state: 'wander', t: 0, hopT: rand(0, 2)
+  };
+}
+
+function randomEdgePos() {
+  const a = rand(0, Math.PI * 2);
+  const r = rand(110, 138);
+  return { x: Math.sin(a) * r, z: Math.cos(a) * r };
+}
+
+function spawnMartians() {
+  for (let i = 0; i < CFG.MARTIAN_COUNT; i++) {
+    const a = i / CFG.MARTIAN_COUNT * Math.PI * 2 + rand(-0.4, 0.4);
+    const r = rand(45, 110);
+    martians.push(makeMartian(Math.sin(a) * r, Math.cos(a) * r));
+  }
+}
+
+function martianHungry(m) { return m.state === 'wander' || m.state === 'chase'; }
+
+function feedMouth(m, mouth) {
+  mouth.fed = true;
+  mouth.ring.material = mouth.ring.material.clone();
+  mouth.ring.material.color.set(0x69d84f);
+  mouth.inner.scale.set(1, 0.25, 1);
+  sfxMunch();
+  puff(mouth.group.getWorldPosition(_a).x, _a.y, _a.z, 5, 0.8, 0xffcf80);
+  let all = true;
+  for (let i = 0; i < m.mouths.length; i++) if (!m.mouths[i].fed) { all = false; break; }
+  if (all) martianHappyNow(m);
+  else toast('Nom! ' + m.mouths.filter(function (mm) { return mm.fed; }).length + '/' + m.mouths.length + ' mouths fed');
+}
+
+function martianHappyNow(m) {
+  m.state = 'happy'; m.t = 0;
+  fedCount++;
+  hudDirty = true;
+  toast('Martian totally fed! (' + Math.min(fedCount, CFG.MARTIANS_TO_FEED) + '/' + CFG.MARTIANS_TO_FEED + ')');
+  if (Math.random() < CFG.DROP_CHANCE) spawnCrystal(m.x + rand(-2, 2), m.z + rand(-2, 2));
+}
+
+function updateMartians(dt) {
+  const rs = roverState;
+  for (let i = martians.length - 1; i >= 0; i--) {
+    const m = martians[i];
+    m.t += dt;
+    const d = dist2d(m.x, m.z, rs.x, rs.z);
+    let moving = false;
+    if (m.state === 'wander') {
+      m.dir += Math.sin(elapsed * 0.6 + m.seed) * 0.8 * dt;
+      m.x += Math.sin(m.dir) * CFG.MARTIAN_SPEED * 0.55 * dt;
+      m.z += Math.cos(m.dir) * CFG.MARTIAN_SPEED * 0.55 * dt;
+      moving = true;
+      if (d < CFG.MARTIAN_CHASE_DIST) m.state = 'chase';
+    } else if (m.state === 'chase') {
+      if (d > CFG.MARTIAN_CHASE_DIST * 1.3) m.state = 'wander';
+      const ang = Math.atan2(rs.x - m.x, rs.z - m.z);
+      if (d > 3.6) {
+        m.dir = ang;
+        m.x += Math.sin(ang) * CFG.MARTIAN_SPEED * dt;
+        m.z += Math.cos(ang) * CFG.MARTIAN_SPEED * dt;
+        moving = true;
+      } else {
+        // hop excitedly around the rover
+        m.dir = ang + Math.PI / 2;
+        m.x += Math.sin(m.dir) * CFG.MARTIAN_SPEED * 0.5 * dt;
+        m.z += Math.cos(m.dir) * CFG.MARTIAN_SPEED * 0.5 * dt;
+        moving = true;
+      }
+    } else if (m.state === 'happy') {
+      if (m.t > 0.7 && !m.burped) { m.burped = true; sfxBurp(); }
+      if (m.t > 2.6) { m.state = 'leave'; m.t = 0; m.dir = Math.atan2(m.x - rs.x, m.z - rs.z); }
+    } else if (m.state === 'leave') {
+      m.x += Math.sin(m.dir) * CFG.MARTIAN_SPEED * 0.8 * dt;
+      m.z += Math.cos(m.dir) * CFG.MARTIAN_SPEED * 0.8 * dt;
+      moving = true;
+      if (m.t > 5) { m.state = 'sink'; m.t = 0; puff(m.x, m.group.position.y + 0.3, m.z, 8, 1.4, 0xa4562c); sfxCrunch(); }
+    } else if (m.state === 'sink') {
+      // burrow back underground
+      if (m.t > 1.1) {
+        scene.remove(m.group);
+        martians.splice(i, 1);
+        setTimeout(function () {
+          const p = randomEdgePos();
+          martians.push(makeMartian(p.x, p.z));
+        }, 3000);
+        continue;
+      }
+    }
+    m.x = clamp(m.x, -142, 142);
+    m.z = clamp(m.z, -142, 142);
+    const gy = terrainH(m.x, m.z);
+    let bob = Math.sin(elapsed * 5 + m.seed) * 0.08;
+    if (m.state === 'happy') bob = Math.abs(Math.sin(m.t * 9)) * 0.8;
+    if (m.state === 'chase' && d < 5) bob = Math.abs(Math.sin(elapsed * 8 + m.seed)) * 0.5;
+    let sink = 0;
+    if (m.state === 'sink') sink = m.t / 1.1 * 3.2;
+    m.group.position.set(m.x, gy + bob - sink, m.z);
+    if (moving) m.group.rotation.y = m.dir;
+    // leg wiggle + hungry mouth pulse
+    for (let l = 0; l < m.legs.length; l++) {
+      m.legs[l].rotation.x = moving ? Math.sin(elapsed * 10 + l * 1.7 + m.seed) * 0.35 : 0;
+    }
+    const pulse = 1 + Math.sin(elapsed * 6 + m.seed) * 0.15;
+    for (let k = 0; k < m.mouths.length; k++) {
+      const mo = m.mouths[k];
+      if (!mo.fed) mo.group.scale.setScalar(martianHungry(m) ? pulse : 1);
+    }
+    m.body.scale.y = 1.25 + Math.sin(elapsed * 5 + m.seed) * 0.04;
+  }
+}
+
+/* ---------- food projectiles ---------- */
+const foods = [];
+const foodGeo = null; // created in boot
+let foodGeoReal, foodMat;
+function fireFood(pos, dir) {
+  const mesh = new THREE.Mesh(foodGeoReal, foodMat);
+  mesh.position.copy(pos);
+  scene.add(mesh);
+  const vel = dir.clone().normalize().multiplyScalar(CFG.FOOD_SPEED);
+  foods.push({ mesh: mesh, vel: vel, life: 0 });
+  sfxThump();
+  puff(pos.x, pos.y, pos.z, 3, 0.4, 0xffe0b0);
+}
+
+function updateFoods(dt) {
+  for (let i = foods.length - 1; i >= 0; i--) {
+    const f = foods[i];
+    f.life += dt;
+    // gentle aim assist: drift toward the nearest open mouth
+    let best = null, bestD = CFG.FOOD_HOMING_RANGE;
+    for (let j = 0; j < martians.length; j++) {
+      const m = martians[j];
+      if (!martianHungry(m)) continue;
+      for (let k = 0; k < m.mouths.length; k++) {
+        const mo = m.mouths[k];
+        if (mo.fed) continue;
+        mo.group.getWorldPosition(_a);
+        const dd = _a.distanceTo(f.mesh.position);
+        if (dd < bestD) { bestD = dd; best = _b.copy(_a); }
+      }
+    }
+    if (best) {
+      _c.copy(best).sub(f.mesh.position).normalize().multiplyScalar(f.vel.length());
+      f.vel.lerp(_c, Math.min(1, CFG.FOOD_HOMING * dt));
+    }
+    f.vel.y -= CFG.FOOD_GRAVITY * dt;
+    f.mesh.position.addScaledVector(f.vel, dt);
+    f.mesh.rotation.x += dt * 8; f.mesh.rotation.z += dt * 5;
+    // mouth hits
+    let hit = false;
+    for (let j = 0; j < martians.length && !hit; j++) {
+      const m = martians[j];
+      if (!martianHungry(m)) continue;
+      for (let k = 0; k < m.mouths.length; k++) {
+        const mo = m.mouths[k];
+        if (mo.fed) continue;
+        mo.group.getWorldPosition(_a);
+        if (_a.distanceTo(f.mesh.position) < CFG.MOUTH_HIT_R) {
+          feedMouth(m, mo);
+          hit = true;
+          break;
+        }
+      }
+    }
+    const gy = terrainH(f.mesh.position.x, f.mesh.position.z);
+    if (hit || f.mesh.position.y < gy + 0.15 || f.life > 6) {
+      if (!hit && f.life <= 6) puff(f.mesh.position.x, gy + 0.2, f.mesh.position.z, 4, 0.6, 0xc98052);
+      scene.remove(f.mesh);
+      foods.splice(i, 1);
+    }
+  }
+}
+
+/* ---------- bonus crystals ---------- */
+const crystals = [];
+function spawnCrystal(x, z) {
+  const g = new THREE.Group();
+  const c = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.55, 0),
+    new THREE.MeshLambertMaterial({ color: 0xff66cc, emissive: 0x551133 })
+  );
+  c.position.y = 1.1;
+  g.add(c);
+  addBlobShadow(g, 0.6);
+  g.position.set(x, terrainH(x, z), z);
+  scene.add(g);
+  crystals.push({ group: g, gem: c, x: x, z: z });
+}
+function updateCrystals(dt) {
+  for (let i = crystals.length - 1; i >= 0; i--) {
+    const cr = crystals[i];
+    cr.gem.rotation.y += dt * 2.5;
+    cr.gem.position.y = 1.1 + Math.sin(elapsed * 3 + i) * 0.2;
+    if (dist2d(cr.x, cr.z, roverState.x, roverState.z) < 4.5) {
+      bonusCount++;
+      hudDirty = true;
+      sfxJingle(true);
+      toast('Bonus snack crystal! (bonus x' + bonusCount + ')');
+      scene.remove(cr.group);
+      crystals.splice(i, 1);
+    }
+  }
+}
+
+/* ---------- particles: dust, fireworks, confetti ---------- */
+const dustPool = [];
+function initDust() {
+  const geo = new THREE.SphereGeometry(0.18, 6, 5);
+  for (let i = 0; i < 48; i++) {
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xc98052, transparent: true, opacity: 0.8, depthWrite: false }));
+    m.visible = false;
+    scene.add(m);
+    dustPool.push({ mesh: m, vel: new THREE.Vector3(), life: 0, max: 0 });
+  }
+}
+function puff(x, y, z, n, spread, col) {
+  let used = 0;
+  for (let i = 0; i < dustPool.length && used < n; i++) {
+    const d = dustPool[i];
+    if (d.life > 0) continue;
+    used++;
+    d.mesh.visible = true;
+    d.mesh.material.color.set(col || 0xc98052);
+    d.mesh.material.opacity = 0.85;
+    d.mesh.scale.setScalar(rand(0.6, 1.4));
+    d.mesh.position.set(x + rand(-spread, spread) * 0.4, y, z + rand(-spread, spread) * 0.4);
+    d.vel.set(rand(-1, 1) * spread, rand(1.5, 3.5), rand(-1, 1) * spread);
+    d.life = d.max = rand(0.45, 0.75);
+  }
+}
+function updateDust(dt) {
+  for (let i = 0; i < dustPool.length; i++) {
+    const d = dustPool[i];
+    if (d.life <= 0) continue;
+    d.life -= dt;
+    if (d.life <= 0) { d.mesh.visible = false; continue; }
+    d.vel.y -= 4 * dt;
+    d.mesh.position.addScaledVector(d.vel, dt);
+    d.mesh.material.opacity = 0.85 * (d.life / d.max);
+  }
+}
+
+const fireworks = [];
+function spawnFirework(x, y, z, col) {
+  const n = 70;
+  const positions = new Float32Array(n * 3);
+  const vels = [];
+  for (let i = 0; i < n; i++) {
+    positions[i * 3] = x; positions[i * 3 + 1] = y; positions[i * 3 + 2] = z;
+    const a = rand(0, Math.PI * 2), b = rand(-1, 1);
+    const r = rand(6, 13);
+    const rr = Math.sqrt(1 - b * b);
+    vels.push(new THREE.Vector3(Math.cos(a) * rr * r, b * r + 3, Math.sin(a) * rr * r));
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.PointsMaterial({ color: col, size: 0.55, transparent: true, opacity: 1, depthWrite: false });
+  const pts = new THREE.Points(geo, mat);
+  scene.add(pts);
+  fireworks.push({ pts: pts, vels: vels, life: 1.6 });
+  sfxBoom();
+}
+function updateFireworks(dt) {
+  for (let i = fireworks.length - 1; i >= 0; i--) {
+    const fw = fireworks[i];
+    fw.life -= dt;
+    if (fw.life <= 0) {
+      scene.remove(fw.pts);
+      fw.pts.geometry.dispose();
+      fw.pts.material.dispose();
+      fireworks.splice(i, 1);
+      continue;
+    }
+    const p = fw.pts.geometry.attributes.position;
+    for (let j = 0; j < fw.vels.length; j++) {
+      const v = fw.vels[j];
+      v.y -= 6 * dt;
+      p.setXYZ(j, p.getX(j) + v.x * dt, p.getY(j) + v.y * dt, p.getZ(j) + v.z * dt);
+    }
+    p.needsUpdate = true;
+    fw.pts.material.opacity = clamp(fw.life / 1.0, 0, 1);
+  }
+}
+
+let confetti = null, confettiVels = [];
+function initConfetti() {
+  const n = 260;
+  const positions = new Float32Array(n * 3);
+  const colors = new Float32Array(n * 3);
+  const tc = new THREE.Color();
+  for (let i = 0; i < n; i++) {
+    positions[i * 3] = rand(-14, 14);
+    positions[i * 3 + 1] = rand(4, 26);
+    positions[i * 3 + 2] = rand(-14, 14);
+    tc.setHSL(Math.random(), 0.85, 0.6);
+    colors[i * 3] = tc.r; colors[i * 3 + 1] = tc.g; colors[i * 3 + 2] = tc.b;
+    confettiVels.push(rand(1.2, 3.2));
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const mat = new THREE.PointsMaterial({ size: 0.4, vertexColors: true, transparent: true, opacity: 0.95, depthWrite: false });
+  confetti = new THREE.Points(geo, mat);
+  confetti.visible = false;
+  scene.add(confetti);
+}
+function updateConfetti(dt) {
+  if (!confetti || !confetti.visible) return;
+  const p = confetti.geometry.attributes.position;
+  for (let i = 0; i < confettiVels.length; i++) {
+    let y = p.getY(i) - confettiVels[i] * dt;
+    let x = p.getX(i) + Math.sin(elapsed * 2 + i) * 0.6 * dt;
+    if (y < 0.2) { y = rand(18, 26); x = rand(-14, 14); p.setZ(i, rand(-14, 14)); }
+    p.setY(i, y); p.setX(i, x);
+  }
+  p.needsUpdate = true;
+}
+
+/* ---------- audio (all procedural) ---------- */
+let AC = null, master = null, noiseBuf = null, engineOsc = null, engineGain = null, engineFilt = null;
+function initAudio() {
+  if (AC) return;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return;
+  AC = new Ctx();
+  master = AC.createGain();
+  master.gain.value = CFG.VOLUME;
+  master.connect(AC.destination);
+  // white noise buffer
+  noiseBuf = AC.createBuffer(1, AC.sampleRate, AC.sampleRate);
+  const data = noiseBuf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  // engine hum loop
+  engineOsc = AC.createOscillator();
+  engineOsc.type = 'sawtooth';
+  engineOsc.frequency.value = 45;
+  engineFilt = AC.createBiquadFilter();
+  engineFilt.type = 'lowpass';
+  engineFilt.frequency.value = 260;
+  engineGain = AC.createGain();
+  engineGain.gain.value = 0;
+  engineOsc.connect(engineFilt).connect(engineGain).connect(master);
+  engineOsc.start();
+}
+function beep(freq, dur, type, vol, slideTo) {
+  if (!AC) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type || 'sine';
+  o.frequency.setValueAtTime(freq, AC.currentTime);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, AC.currentTime + dur);
+  g.gain.setValueAtTime(vol || 0.18, AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + dur);
+  o.connect(g).connect(master);
+  o.start(); o.stop(AC.currentTime + dur + 0.02);
+}
+function noiseHit(dur, filterFreq, vol, type) {
+  if (!AC) return;
+  const s = AC.createBufferSource();
+  s.buffer = noiseBuf;
+  s.loop = true;
+  const f = AC.createBiquadFilter();
+  f.type = type || 'lowpass';
+  f.frequency.value = filterFreq;
+  const g = AC.createGain();
+  g.gain.setValueAtTime(vol, AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + dur);
+  s.connect(f).connect(g).connect(master);
+  s.start(); s.stop(AC.currentTime + dur + 0.02);
+}
+function sfxThump() { noiseHit(0.14, 240, 0.32); beep(95, 0.12, 'sine', 0.25, 42); }
+function sfxCrunch() { noiseHit(0.09, rand(420, 900), 0.22, 'bandpass'); }
+function sfxMunch() { sfxCrunch(); setTimeout(sfxCrunch, 70); beep(rand(500, 700), 0.08, 'triangle', 0.1); }
+function sfxClick() { beep(880, 0.05, 'square', 0.08); }
+function sfxJingle(short) {
+  const notes = short ? [880, 1175] : [660, 880, 1100, 1320];
+  for (let i = 0; i < notes.length; i++) {
+    (function (n, i2) { setTimeout(function () { beep(n, 0.16, 'triangle', 0.16); }, i2 * 95); })(notes[i], i);
+  }
+}
+function sfxFanfare() {
+  const notes = [523, 659, 784, 1046];
+  for (let i = 0; i < notes.length; i++) {
+    (function (n, i2) { setTimeout(function () { beep(n, 0.3, 'square', 0.12); beep(n / 2, 0.3, 'triangle', 0.1); }, i2 * 160); })(notes[i], i);
+  }
+}
+function sfxBurp() { beep(165, 0.4, 'sawtooth', 0.24, 62); noiseHit(0.3, 300, 0.1); }
+function sfxHonk(f, dur) { beep(f, dur || 0.28, 'square', 0.14); beep(f * 0.5, dur || 0.28, 'sawtooth', 0.07); }
+function sfxBoom() { noiseHit(0.55, 140, 0.35); beep(70, 0.4, 'sine', 0.2, 35); }
+function updateEngine(dt) {
+  if (!engineGain) return;
+  const frac = Math.abs(roverState.speed) / CFG.ROVER_SPEED;
+  engineGain.gain.value = lerp(engineGain.gain.value, frac * 0.11, dt * 6);
+  engineOsc.frequency.value = 45 + frac * 75;
+}
+// honk-sung "Happy Birthday" opening phrase for the finale
+const BDAY = [[392, 0.3], [392, 0.3], [440, 0.55], [392, 0.55], [523, 0.55], [494, 0.9]];
+function honkBirthday() {
+  let t = 0;
+  for (let i = 0; i < BDAY.length; i++) {
+    (function (note, tt) {
+      setTimeout(function () { sfxHonk(note[0], note[1]); }, tt * 1000);
+    })(BDAY[i], t);
+    t += BDAY[i][1] + 0.12;
+  }
+}
+
+/* ---------- input ---------- */
+const keys = {};
+let action = false, mouseDown = false, lastPX = 0, lastPY = 0;
+let joyVec = { x: 0, y: 0 }, joyId = null, lookId = null;
+let ctrlLeft = null, ctrlRight = null, xrSession = null;
+let vrSwapPrev = false, vrResetPrev = false;
+
+function setupInput() {
+  window.addEventListener('keydown', function (e) {
+    keys[e.code] = true;
+    if (e.code === 'Tab' || e.code === 'KeyQ') { e.preventDefault(); swapTool(); }
+    if (e.code === 'KeyR') resetRover();
+    if (e.code === 'Space' || e.code === 'KeyE') { e.preventDefault(); action = true; }
+  });
+  window.addEventListener('keyup', function (e) {
+    keys[e.code] = false;
+    if (e.code === 'Space' || e.code === 'KeyE') action = false;
+  });
+  const cv = renderer.domElement;
+  cv.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  cv.addEventListener('mousedown', function (e) {
+    mouseDown = true; lastPX = e.clientX; lastPY = e.clientY;
+    if (e.button === 0) action = true;
+  });
+  window.addEventListener('mouseup', function () { mouseDown = false; action = keys['Space'] || keys['KeyE'] || false; });
+  window.addEventListener('mousemove', function (e) {
+    if (!mouseDown) return;
+    camYaw -= (e.clientX - lastPX) * 0.005;
+    camPitch = clamp(camPitch + (e.clientY - lastPY) * 0.004, 0.08, 1.1);
+    lastPX = e.clientX; lastPY = e.clientY;
+  });
+  if (isMobile) setupTouch();
+}
+
+function setupTouch() {
+  const joy = document.getElementById('joy');
+  const knob = document.getElementById('knob');
+  const btnAct = document.getElementById('btnAct');
+  const btnSwap = document.getElementById('btnSwap');
+  const btnReset = document.getElementById('btnReset');
+  joy.style.display = 'block';
+  btnAct.style.display = 'flex';
+  btnSwap.style.display = 'flex';
+  btnReset.style.display = 'flex';
+  function joyCenter() {
+    const r = joy.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
+  function setKnob(dx, dy) {
+    knob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+  }
+  window.addEventListener('touchstart', function (e) {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const t = e.changedTouches[i];
+      const el = document.elementFromPoint(t.clientX, t.clientY);
+      if (el === joy || el === knob) {
+        joyId = t.identifier;
+      } else if (el === btnAct) {
+        action = true;
+      } else if (el === btnSwap) {
+        swapTool();
+      } else if (el === btnReset) {
+        resetRover();
+      } else if (lookId === null) {
+        lookId = t.identifier; lastPX = t.clientX; lastPY = t.clientY;
+      }
+    }
+  }, { passive: false });
+  window.addEventListener('touchmove', function (e) {
+    e.preventDefault();
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const t = e.changedTouches[i];
+      if (t.identifier === joyId) {
+        const c = joyCenter();
+        let dx = t.clientX - c.x, dy = t.clientY - c.y;
+        const len = Math.hypot(dx, dy);
+        if (len > 44) { dx *= 44 / len; dy *= 44 / len; }
+        setKnob(dx, dy);
+        joyVec.x = dx / 44; joyVec.y = -dy / 44;
+      } else if (t.identifier === lookId) {
+        camYaw -= (t.clientX - lastPX) * 0.006;
+        camPitch = clamp(camPitch + (t.clientY - lastPY) * 0.005, 0.08, 1.1);
+        lastPX = t.clientX; lastPY = t.clientY;
+      }
+    }
+  }, { passive: false });
+  function endTouch(e) {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const t = e.changedTouches[i];
+      if (t.identifier === joyId) { joyId = null; joyVec.x = 0; joyVec.y = 0; setKnob(0, 0); }
+      if (t.identifier === lookId) lookId = null;
+    }
+    if (e.touches.length === 0) action = false;
+  }
+  window.addEventListener('touchend', endTouch);
+  window.addEventListener('touchcancel', endTouch);
+  // keep ACTION pressed while finger stays on the button
+  btnAct.addEventListener('touchstart', function (e) { e.preventDefault(); action = true; }, { passive: false });
+  btnAct.addEventListener('touchend', function () { action = false; });
+}
+
+/* ---------- VR ---------- */
+function makeControllerViz(col) {
+  const g = new THREE.Group();
+  const cone = new THREE.Mesh(
+    new THREE.ConeGeometry(0.03, 0.12, 8),
+    new THREE.MeshLambertMaterial({ color: col })
+  );
+  cone.rotation.x = -Math.PI / 2;
+  g.add(cone);
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.045, 0.012, 6, 14),
+    new THREE.MeshLambertMaterial({ color: 0xffffff })
+  );
+  ring.position.z = 0.05;
+  g.add(ring);
+  // short aim ray on the right hand
+  const ray = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.004, 0.004, 3, 5),
+    new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.5 })
+  );
+  ray.rotation.x = Math.PI / 2;
+  ray.position.z = -1.5;
+  g.add(ray);
+  return g;
+}
+
+function setupVR() {
+  renderer.xr.enabled = true;
+  const btn = document.getElementById('btnVR');
+  if (navigator.xr && navigator.xr.isSessionSupported) {
+    navigator.xr.isSessionSupported('immersive-vr').then(function (ok) {
+      if (ok) btn.style.display = 'inline-block';
+    }).catch(function () {});
+  }
+  btn.addEventListener('click', function () {
+    if (xrSession) { xrSession.end(); return; }
+    navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor', 'bounded-floor'] })
+      .then(function (session) {
+        xrSession = session;
+        inVR = true;
+        initAudio();
+        hideOverlay();
+        renderer.xr.setSession(session);
+        dashPanel.visible = true;
+        session.addEventListener('end', function () {
+          xrSession = null; inVR = false;
+          dashPanel.visible = false;
+        });
+      }).catch(function (err) { toast('VR failed to start: ' + err.message); });
+  });
+  const c0 = renderer.xr.getController(0);
+  const c1 = renderer.xr.getController(1);
+  function hookup(c) {
+    c.addEventListener('connected', function (e) {
+      if (e.data.handedness === 'left') { ctrlLeft = c; c.add(makeControllerViz(0x55aaff)); }
+      else { ctrlRight = c; c.add(makeControllerViz(0xffaa33)); }
+    });
+    c.addEventListener('disconnected', function () {
+      if (c === ctrlLeft) ctrlLeft = null;
+      if (c === ctrlRight) ctrlRight = null;
+    });
+    dolly.add(c);
+  }
+  hookup(c0); hookup(c1);
+}
+
+function pollVR() {
+  if (!inVR || !xrSession) return { throttle: 0, turn: 0 };
+  let throttle = 0, turn = 0;
+  let swapNow = false, resetNow = false;
+  const sources = xrSession.inputSources;
+  for (let i = 0; i < sources.length; i++) {
+    const src = sources[i];
+    if (!src.gamepad) continue;
+    const gp = src.gamepad;
+    if (src.handedness === 'left') {
+      if (gp.axes.length >= 4) { turn = gp.axes[2]; throttle = -gp.axes[3]; }
+      if (gp.buttons[1] && gp.buttons[1].pressed) resetNow = true; // left grip
+    } else if (src.handedness === 'right') {
+      if (gp.buttons[0] && gp.buttons[0].pressed) action = true;
+      else if (!keys['Space']) action = false;
+      if ((gp.buttons[4] && gp.buttons[4].pressed) || (gp.buttons[5] && gp.buttons[5].pressed)) swapNow = true; // A/B
+    }
+  }
+  if (swapNow && !vrSwapPrev) swapTool();
+  vrSwapPrev = swapNow;
+  if (resetNow && !vrResetPrev) resetRover();
+  vrResetPrev = resetNow;
+  return { throttle: throttle, turn: turn };
+}
+
+/* ---------- HUD (DOM + VR dashboard panel) ---------- */
+let toastTimer = null, vrMsg = '', vrMsgUntil = 0;
+function toast(text, dur) {
+  const el = document.getElementById('toast');
+  el.textContent = text;
+  el.style.opacity = '1';
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { el.style.opacity = '0'; }, (dur || 2.6) * 1000);
+  vrMsg = text; vrMsgUntil = elapsed + (dur || 2.6);
+  hudDirty = true;
+}
+function bigMsg(text, dur) {
+  const el = document.getElementById('big');
+  el.textContent = text;
+  el.style.opacity = '1';
+  setTimeout(function () { el.style.opacity = '0'; }, (dur || 5) * 1000);
+  vrMsg = text; vrMsgUntil = elapsed + (dur || 5);
+  hudDirty = true;
+}
+
+function buildDashPanel() {
+  const cv = document.createElement('canvas');
+  cv.width = 640; cv.height = 240;
+  dashCtx = cv.getContext('2d');
+  dashTex = new THREE.CanvasTexture(cv);
+  dashPanel = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.95, 0.36),
+    new THREE.MeshBasicMaterial({ map: dashTex, transparent: true, depthWrite: false })
+  );
+  dashPanel.position.set(0, 1.05, -1.35);
+  dashPanel.rotation.x = -0.35;
+  dashPanel.visible = false;
+  dolly.add(dashPanel);
+}
+function drawDash() {
+  const ctx = dashCtx;
+  ctx.clearRect(0, 0, 640, 240);
+  ctx.fillStyle = 'rgba(30,10,4,0.78)';
+  roundRect(ctx, 0, 0, 640, 240, 26);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,180,110,0.5)';
+  ctx.lineWidth = 5;
+  roundRect(ctx, 4, 4, 632, 232, 22);
+  ctx.stroke();
+  ctx.fillStyle = '#ffe8d0';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.font = 'bold 40px sans-serif';
+  ctx.fillText('Samples ' + samples + '/' + CFG.DIG_SITES + '   Fed ' + Math.min(fedCount, CFG.MARTIANS_TO_FEED) + '/' + CFG.MARTIANS_TO_FEED + '   Sites ' + foundCount + '/3', 28, 48);
+  ctx.font = 'bold 34px sans-serif';
+  ctx.fillStyle = '#ffd27a';
+  const toolTxt = roverState.tool === 'scoop' ? 'TOOL: SCOOP ARM' : 'TOOL: FOOD CANNON';
+  ctx.fillText(toolTxt + (bonusCount > 0 ? '   Bonus x' + bonusCount : ''), 28, 104);
+  if (vrMsg && elapsed < vrMsgUntil) {
+    ctx.fillStyle = '#aef0a0';
+    ctx.font = 'bold 30px sans-serif';
+    ctx.fillText(vrMsg.substring(0, 40), 28, 168);
+  }
+  dashTex.needsUpdate = true;
+}
+
+function refreshHUD() {
+  document.getElementById('log').textContent =
+    'Samples ' + samples + '/' + CFG.DIG_SITES +
+    ' · Fed ' + Math.min(fedCount, CFG.MARTIANS_TO_FEED) + '/' + CFG.MARTIANS_TO_FEED +
+    ' · Sites ' + foundCount + '/3' +
+    (bonusCount > 0 ? ' · Bonus x' + bonusCount : '');
+  document.getElementById('tool').textContent =
+    roverState.tool === 'scoop' ? 'TOOL: SCOOP ARM  (swap: Tab)' : 'TOOL: FOOD CANNON  (swap: Tab)';
+  drawDash();
+  hudDirty = false;
+}
+
+/* ---------- rover update / camera ---------- */
+function updateRover(dt) {
+  const rs = roverState;
+  let throttle = 0, turn = 0;
+  if (inVR) {
+    const v = pollVR();
+    throttle = clamp(v.throttle, -1, 1);
+    turn = clamp(v.turn, -1, 1);
+    if (Math.abs(throttle) < 0.12) throttle = 0;
+    if (Math.abs(turn) < 0.12) turn = 0;
+  } else if (isMobile && (joyVec.x !== 0 || joyVec.y !== 0)) {
+    throttle = clamp(joyVec.y, -1, 1);
+    turn = clamp(joyVec.x, -1, 1);
+  } else {
+    if (keys['KeyW'] || keys['ArrowUp']) throttle = 1;
+    if (keys['KeyS'] || keys['ArrowDown']) throttle = -1;
+    if (keys['KeyA'] || keys['ArrowLeft']) turn = -1;
+    if (keys['KeyD'] || keys['ArrowRight']) turn = 1;
+  }
+  // hungry martians nearby playfully slow the rover
+  let near = 0;
+  for (let i = 0; i < martians.length; i++) {
+    const m = martians[i];
+    if (martianHungry(m) && dist2d(m.x, m.z, rs.x, rs.z) < CFG.MARTIAN_NEAR) near++;
+  }
+  const slow = 1 - Math.min(CFG.MARTIAN_SLOW_MAX, near * CFG.MARTIAN_SLOW_EACH);
+  const target = throttle * CFG.ROVER_SPEED * slow * (throttle < 0 ? 0.55 : 1);
+  rs.speed = rs.speed + clamp(target - rs.speed, -CFG.ROVER_ACCEL * dt, CFG.ROVER_ACCEL * dt);
+  if (throttle !== 0 || Math.abs(rs.speed) > 0.5) {
+    rs.yaw -= turn * CFG.ROVER_TURN * dt * (rs.speed < -0.5 ? -1 : 1);
+  }
+  rs.x += Math.sin(rs.yaw) * rs.speed * dt;
+  rs.z += Math.cos(rs.yaw) * rs.speed * dt;
+  const lim = CFG.MAP_SIZE / 2 - CFG.EDGE_PAD;
+  if (Math.abs(rs.x) > lim || Math.abs(rs.z) > lim) rs.speed *= 0.5;
+  rs.x = clamp(rs.x, -lim, lim);
+  rs.z = clamp(rs.z, -lim, lim);
+  // terrain follow: sample under wheels
+  const fx = Math.sin(rs.yaw), fz = Math.cos(rs.yaw);
+  const rx = fz, rzz = -fx;
+  const hC = terrainH(rs.x, rs.z);
+  const hF = terrainH(rs.x + fx * 1.8, rs.z + fz * 1.8);
+  const hB = terrainH(rs.x - fx * 1.8, rs.z - fz * 1.8);
+  const hL = terrainH(rs.x - rx * 1.4, rs.z - rzz * 1.4);
+  const hR = terrainH(rs.x + rx * 1.4, rs.z + rzz * 1.4);
+  rover.position.set(rs.x, Math.max(hC, (hF + hB) / 2), rs.z);
+  rover.rotation.order = 'YXZ';
+  rover.rotation.y = rs.yaw;
+  rover.rotation.x = Math.atan2(hB - hF, 3.6);
+  rover.rotation.z = Math.atan2(hL - hR, 2.8);
+  // wheels
+  for (let i = 0; i < wheels.length; i++) wheels[i].rotation.x += rs.speed * dt / 0.55;
+  // dust kick when moving fast
+  if (Math.abs(rs.speed) > 6 && Math.random() < dt * 8) {
+    puff(rs.x - fx * 1.6, rover.position.y + 0.3, rs.z - fz * 1.6, 1, 0.8, 0xc98052);
+  }
+  rs.cool = Math.max(0, rs.cool - dt);
+  updateEngine(dt);
+}
+
+function aimYawWorld() {
+  if (inVR && ctrlRight) {
+    ctrlRight.getWorldQuaternion(_qa);
+    _a.set(0, 0, -1).applyQuaternion(_qa);
+    return Math.atan2(_a.x, _a.z);
+  }
+  if (isMobile) {
+    // auto-aim: face the nearest hungry martian, else forward
+    let best = null, bestD = 40;
+    for (let i = 0; i < martians.length; i++) {
+      const m = martians[i];
+      if (!martianHungry(m)) continue;
+      const dd = dist2d(m.x, m.z, roverState.x, roverState.z);
+      if (dd < bestD) { bestD = dd; best = m; }
+    }
+    if (best) return Math.atan2(best.x - roverState.x, best.z - roverState.z);
+    return roverState.yaw;
+  }
+  return camYaw + Math.PI; // fire where the camera looks
+}
+
+function updateTurretAndAction(dt) {
+  const rs = roverState;
+  const aimW = aimYawWorld();
+  // the food cannon yaws toward wherever you're aiming; the drill arm stays put
+  const wantYaw = aimW - rs.yaw;
+  let dyaw = ((wantYaw - cannon.rotation.y + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+  cannon.rotation.y += dyaw * Math.min(1, dt * 10);
+  // gentle idle bob on the drill arm when it isn't working
+  const digging = action && rs.tool === 'scoop';
+  if (drillBit) drillBit.rotation.z += (digging ? 22 : 2) * dt;
+  if (cannonBarrel) cannonBarrel.position.z = lerp(cannonBarrel.position.z, 0.1, dt * 12); // recover recoil
+  if (!action) { rs.digSnd = 0; scoopArm.rotation.x = lerp(scoopArm.rotation.x, 0, dt * 8); return; }
+  if (rs.tool === 'cannon') {
+    scoopArm.rotation.x = lerp(scoopArm.rotation.x, 0, dt * 8);
+    if (rs.cool <= 0) {
+      rs.cool = CFG.FOOD_COOLDOWN;
+      cannonTip.getWorldPosition(_a);
+      if (inVR && ctrlRight) {
+        ctrlRight.getWorldQuaternion(_qa);
+        _b.set(0, 0, -1).applyQuaternion(_qa);
+        _b.y += 0.1;
+      } else {
+        _b.set(Math.sin(aimW), 0, Math.cos(aimW));
+        _b.y = 0.62; // party-friendly lob arc
+      }
+      fireFood(_a, _b);
+      if (cannonBarrel) cannonBarrel.position.z = -0.05; // recoil kick
+    }
+  } else {
+    // scoop: dig the nearest active site in range
+    let site = null, bestD = CFG.DIG_RANGE;
+    for (let i = 0; i < digSites.length; i++) {
+      const s = digSites[i];
+      if (s.done) continue;
+      const dd = dist2d(s.x, s.z, rs.x, rs.z);
+      if (dd < bestD) { bestD = dd; site = s; }
+    }
+    if (!site) { scoopArm.rotation.x = lerp(scoopArm.rotation.x, 0, dt * 8); return; }
+    site.progress += dt / CFG.DIG_TIME;
+    site.pil.visible = true;
+    site.pil.scale.y = clamp(site.progress, 0.001, 1);
+    site.pil.position.y = 0.2 + clamp(site.progress, 0, 1) * 1.2;
+    // bob the whole arm as it drills
+    scoopArm.rotation.x = Math.sin(elapsed * 18) * 0.12;
+    rs.digSnd -= dt;
+    if (rs.digSnd <= 0) {
+      rs.digSnd = 0.16;
+      sfxCrunch();
+      puff(site.x + rand(-0.8, 0.8), site.group.position.y + 0.4, site.z + rand(-0.8, 0.8), 2, 0.9, 0xa4562c);
+    }
+    if (site.progress >= 1) collectSample(site);
+  }
+}
+
+function collectSample(site) {
+  site.done = true;
+  site.ring.visible = false;
+  site.col.visible = false;
+  site.pil.visible = false;
+  site.mound.material = site.mound.material.clone();
+  site.mound.material.color.set(0x6e3418);
+  site.mound.scale.y = 0.15;
+  const hole = new THREE.Mesh(
+    new THREE.CircleGeometry(0.9, 14),
+    new THREE.MeshBasicMaterial({ color: 0x2c1108 })
+  );
+  hole.rotation.x = -Math.PI / 2;
+  hole.position.y = 0.28;
+  site.group.add(hole);
+  samples++;
+  hudDirty = true;
+  sfxJingle();
+  toast('Collected: ' + site.name + '! (' + samples + '/' + CFG.DIG_SITES + ')', 3);
+  scoopArm.rotation.x = 0;
+}
+
+function updateSites(dt) {
+  for (let i = 0; i < digSites.length; i++) {
+    const s = digSites[i];
+    if (s.done) continue;
+    const pul = 1 + Math.sin(elapsed * 3 + i) * 0.12;
+    s.ring.scale.setScalar(pul);
+    s.ring.material.opacity = 0.65 + Math.sin(elapsed * 3 + i) * 0.25;
+    const inRange = dist2d(s.x, s.z, roverState.x, roverState.z) < CFG.DIG_RANGE;
+    s.ring.material.color.set(inRange ? 0x7fe36b : 0xffc24b);
+    if (inRange && !s.prompted) {
+      s.prompted = true;
+      toast(roverState.tool === 'scoop' ? 'Dig site! Hold ACTION to dig' : 'Dig site! Swap to SCOOP, then hold ACTION');
+    }
+    if (!inRange) s.prompted = false;
+  }
+}
+
+function updateLandmarks() {
+  for (let i = 0; i < landmarks.length; i++) {
+    const lm = landmarks[i];
+    if (lm.found) continue;
+    lm.glow.rotation.z = elapsed;
+    if (dist2d(lm.x, lm.z, roverState.x, roverState.z) < CFG.LANDMARK_RANGE) {
+      lm.found = true;
+      lm.glow.visible = false;
+      foundCount++;
+      hudDirty = true;
+      sfxFanfare();
+      toast('Discovered: ' + lm.name + '! (' + foundCount + '/3)', 3.2);
+    }
+  }
+}
+
+/* ---------- camera / dolly ---------- */
+function updateCamera(dt) {
+  const rs = roverState;
+  if (inVR) {
+    dolly.position.set(rs.x, rover.position.y + 1.4, rs.z); // seated on the deck
+    dolly.rotation.set(0, rs.yaw, 0);
+    return;
+  }
+  // gentle chase: camYaw eases toward behind-the-rover while driving
+  if (!mouseDown && lookId === null && Math.abs(rs.speed) > 2) {
+    let want = rs.yaw + Math.PI;
+    let diff = ((want - camYaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    camYaw += diff * dt * 1.6;
+  }
+  const cd = CFG.CAM_DIST;
+  const cx = rs.x + Math.sin(camYaw) * cd * Math.cos(camPitch);
+  const cz = rs.z + Math.cos(camYaw) * cd * Math.cos(camPitch);
+  const cy = rover.position.y + CFG.CAM_HEIGHT + Math.sin(camPitch) * cd * 0.6;
+  const gy = terrainH(cx, cz) + 1.2;
+  dolly.position.set(cx, Math.max(cy, gy), cz);
+  dolly.lookAt(rs.x, rover.position.y + 2, rs.z);
+}
+
+/* ---------- finale ---------- */
+let cake = null, singers = [], fwTimer = 0, songTimer = 0, finaleT = 0, flame = null;
+function startFinale() {
+  finale = true;
+  bigMsg('SAMPLE LOG COMPLETE! Head to base camp! 🎉', 6);
+  sfxFanfare();
+  confetti.visible = true;
+  // birthday cake on the landing pad
+  cake = new THREE.Group();
+  const table = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 0.9, 14), new THREE.MeshLambertMaterial({ color: 0x8a5a3a }));
+  table.position.y = 0.45;
+  cake.add(table);
+  const layer1 = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.5, 16), new THREE.MeshLambertMaterial({ color: 0xf3a6c9 }));
+  layer1.position.y = 1.15;
+  cake.add(layer1);
+  const layer2 = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.45, 16), new THREE.MeshLambertMaterial({ color: 0xfff0e0 }));
+  layer2.position.y = 1.6;
+  cake.add(layer2);
+  const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.5, 8), new THREE.MeshLambertMaterial({ color: 0x6fb8ff }));
+  candle.position.y = 2.05;
+  cake.add(candle);
+  flame = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffaa33 }));
+  flame.position.y = 2.38;
+  cake.add(flame);
+  const glowRing = new THREE.Mesh(
+    new THREE.TorusGeometry(2, 0.12, 8, 28),
+    new THREE.MeshBasicMaterial({ color: 0xffd700, transparent: true, opacity: 0.85 })
+  );
+  glowRing.rotation.x = -Math.PI / 2;
+  glowRing.position.y = 0.25;
+  cake.add(glowRing);
+  cake.position.set(0, 0.06, 0);
+  scene.add(cake);
+  // martian choir circles the base
+  for (let i = 0; i < 6; i++) {
+    const a = i / 6 * Math.PI * 2;
+    const m = makeMartian(Math.sin(a) * 11, Math.cos(a) * 11);
+    m.state = 'sing';
+    m.group.rotation.y = a + Math.PI; // face the cake
+    singers.push(m);
+  }
+  fwTimer = 0.3; songTimer = 1.5; finaleT = 0;
+}
+
+function updateFinale(dt) {
+  if (!finale) {
+    if (samples >= CFG.DIG_SITES && fedCount >= CFG.MARTIANS_TO_FEED && foundCount >= 3) startFinale();
+    return;
+  }
+  finaleT += dt;
+  // fireworks: dense burst period, then occasional forever
+  fwTimer -= dt;
+  if (fwTimer <= 0) {
+    fwTimer = finaleT < CFG.FINALE_BURSTS ? rand(0.7, 1.3) : rand(4.5, 7.5);
+    const col = new THREE.Color().setHSL(Math.random(), 0.9, 0.6).getHex();
+    spawnFirework(rand(-22, 22), rand(16, 30), rand(-22, 22), col);
+  }
+  // honk choir sings happy birthday
+  songTimer -= dt;
+  if (songTimer <= 0) { songTimer = 7.5; honkBirthday(); }
+  // singers bounce in rhythm
+  for (let i = 0; i < singers.length; i++) {
+    const m = singers[i];
+    m.group.position.y = terrainH(m.x, m.z) + Math.abs(Math.sin(elapsed * 6 + i)) * 0.7;
+    for (let k = 0; k < m.mouths.length; k++) {
+      m.mouths[k].group.scale.setScalar(1 + Math.abs(Math.sin(elapsed * 6 + i)) * 0.3);
+    }
+  }
+  if (flame) flame.scale.setScalar(1 + Math.sin(elapsed * 14) * 0.3);
+  // collect the cake!
+  if (!cakeGot && cake && dist2d(0, 0, roverState.x, roverState.z) < 6) {
+    cakeGot = true;
+    bigMsg('🎂 HAPPY BIRTHDAY REID! 🎂', 9);
+    sfxFanfare();
+    setTimeout(sfxJingle, 500);
+    setTimeout(honkBirthday, 900);
+    for (let i = 0; i < 9; i++) {
+      (function (i2) {
+        setTimeout(function () {
+          const col = new THREE.Color().setHSL(Math.random(), 0.9, 0.6).getHex();
+          spawnFirework(rand(-25, 25), rand(18, 34), rand(-25, 25), col);
+        }, i2 * 220);
+      })(i);
+    }
+    toast('Sandbox stays open — keep exploring!', 6);
+  }
+}
+
+/* ---------- overlay / boot ---------- */
+function hideOverlay() {
+  document.getElementById('overlay').style.display = 'none';
+  started = true;
+}
+
+let _qa;
+function boot() {
+  scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0xd9885f, 60, 420);
+  camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 2500);
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  document.body.appendChild(renderer.domElement);
+  dolly = new THREE.Group();
+  dolly.add(camera);
+  scene.add(dolly);
+  clock = new THREE.Clock();
+  _a = new THREE.Vector3(); _b = new THREE.Vector3(); _c = new THREE.Vector3();
+  _qa = new THREE.Quaternion();
+  foodGeoReal = new THREE.SphereGeometry(0.32, 10, 8);
+  foodMat = new THREE.MeshLambertMaterial({ color: 0xffcf3a, emissive: 0x5a3200 });
+
+  scene.add(new THREE.HemisphereLight(0xffd9b0, 0x7a3b20, 0.9));
+  const sun = new THREE.DirectionalLight(0xfff0dd, 0.85);
+  sun.position.set(120, 180, 60);
+  scene.add(sun);
+
+  buildSky();
+  buildBase();
+  buildDigSites();
+  buildLandmarks();
+  buildTerrain();
+  buildRocks();
+  buildRover();
+  spawnMartians();
+  initDust();
+  initConfetti();
+  buildDashPanel();
+  setupInput();
+  setupVR();
+  refreshHUD();
+
+  window.addEventListener('resize', function () {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  document.getElementById('btnStart').addEventListener('click', function () {
+    initAudio();
+    if (AC && AC.state === 'suspended') AC.resume();
+    hideOverlay();
+    toast('Find dig sites, feed martians, discover landmarks!', 4);
+  });
+
+  renderer.setAnimationLoop(animate);
+}
+
+let hudTick = 0;
+function animate() {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  elapsed += dt;
+  if (started || inVR) {
+    updateRover(dt);
+    updateTurretAndAction(dt);
+    updateMartians(dt);
+    updateFoods(dt);
+    updateCrystals(dt);
+    updateSites(dt);
+    updateLandmarks();
+    updateDust(dt);
+    updateFireworks(dt);
+    updateConfetti(dt);
+    updateFinale(dt);
+  }
+  updateCamera(dt);
+  hudTick -= dt;
+  if (hudDirty && hudTick <= 0) { hudTick = 0.2; refreshHUD(); }
+  renderer.render(scene, camera);
+}
+
+boot();
+</script>
+</body>
+</html>
