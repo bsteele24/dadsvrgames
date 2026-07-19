@@ -145,6 +145,12 @@ function terrainH(x, z) {
     if (dd < c.r) h -= c.d * (0.5 + 0.5 * Math.cos(Math.PI * dd / c.r));
     else if (dd < c.r * 1.25) h += c.d * 0.25 * (1 - (dd - c.r) / (c.r * 0.25));
   }
+  // Reid Peak: a tall overlook mountain
+  const rpd = Math.hypot(x - 70, z - 83);
+  if (rpd < 30) {
+    const t = 0.5 + 0.5 * Math.cos(Math.PI * rpd / 30); // 1 at summit → 0 at base
+    h += 24 * t * t;
+  }
   // flatten base camp
   const bd = Math.hypot(x, z);
   if (bd < 26) h *= clamp((bd - 14) / 12, 0, 1);
@@ -167,30 +173,42 @@ function buildSky() {
   const sky = new THREE.Mesh(geo, mat);
   sky.renderOrder = -3;
   scene.add(sky);
-  // pale small sun (it's far away on Mars)
+  // pale sun (bigger and more yellow now)
   const sun = new THREE.Mesh(
-    new THREE.CircleGeometry(16, 24),
-    new THREE.MeshBasicMaterial({ color: 0xfff6e8, depthWrite: false, fog: false })
+    new THREE.CircleGeometry(24, 32),
+    new THREE.MeshBasicMaterial({ color: 0xffe066, depthWrite: false, fog: false })
   );
   sun.position.set(350, 460, -620);
   sun.lookAt(0, 0, 0);
   sun.renderOrder = -2;
   scene.add(sun);
-  // Phobos: a lumpy potato
+  // soft yellow halo so the bigger disc reads nicely
+  const halo = new THREE.Mesh(
+    new THREE.CircleGeometry(38, 32),
+    new THREE.MeshBasicMaterial({ color: 0xffd24a, transparent: true, opacity: 0.28, depthWrite: false, fog: false })
+  );
+  halo.position.copy(sun.position);
+  halo.lookAt(0, 0, 0);
+  halo.renderOrder = -2.5;
+  scene.add(halo);
+  // Phobos: a lumpy potato — larger and shaded for definition
   const pho = new THREE.Mesh(
-    new THREE.IcosahedronGeometry(9, 0),
-    new THREE.MeshBasicMaterial({ color: 0xd9c2a8, depthWrite: false, fog: false })
+    new THREE.IcosahedronGeometry(13.5, 1),
+    new THREE.MeshLambertMaterial({ color: 0xd9c2a8, emissive: 0x2a2118, depthWrite: false, fog: false })
   );
   pho.scale.set(1.4, 0.9, 1);
   pho.position.set(-500, 380, 300);
+  pho.rotation.set(0.5, 0.9, 0.2);
   pho.renderOrder = -2;
   scene.add(pho);
-  // Deimos: tiny dot
+  // Deimos: smaller moon — larger and shaded now
   const dei = new THREE.Mesh(
-    new THREE.SphereGeometry(4, 10, 8),
-    new THREE.MeshBasicMaterial({ color: 0xcbb79d, depthWrite: false, fog: false })
+    new THREE.IcosahedronGeometry(6, 1),
+    new THREE.MeshLambertMaterial({ color: 0xcbb79d, emissive: 0x2a2418, depthWrite: false, fog: false })
   );
+  dei.scale.set(1.15, 0.95, 1);
   dei.position.set(420, 300, 480);
+  dei.rotation.set(0.8, 0.3, 0.6);
   dei.renderOrder = -2;
   scene.add(dei);
 }
@@ -1256,7 +1274,10 @@ function updateEngine(dt) {
 }
 // honk-sung "Happy Birthday" opening phrase for the finale
 const BDAY = [[392, 0.3], [392, 0.3], [440, 0.55], [392, 0.55], [523, 0.55], [494, 0.9]];
+let bdayPlays = 0; // the birthday song plays at most 4 times at the finale
 function honkBirthday() {
+  if (bdayPlays >= 4) return;
+  bdayPlays++;
   let t = 0;
   for (let i = 0; i < BDAY.length; i++) {
     (function (note, tt) {
@@ -1787,6 +1808,7 @@ function updateCamera(dt) {
 let cake = null, singers = [], fwTimer = 0, songTimer = 0, finaleT = 0, flame = null;
 function startFinale() {
   finale = true;
+  bdayPlays = 0;
   bigMsg('SAMPLE LOG COMPLETE! Head to base camp! 🎉', 6);
   sfxFanfare();
   confetti.visible = true;
@@ -1840,9 +1862,9 @@ function updateFinale(dt) {
     const col = new THREE.Color().setHSL(Math.random(), 0.9, 0.6).getHex();
     spawnFirework(rand(-22, 22), rand(16, 30), rand(-22, 22), col);
   }
-  // honk choir sings happy birthday
+  // honk choir sings happy birthday — up to 4 times, then it rests
   songTimer -= dt;
-  if (songTimer <= 0) { songTimer = 7.5; honkBirthday(); }
+  if (songTimer <= 0 && bdayPlays < 4) { songTimer = 7.5; honkBirthday(); }
   // singers bounce in rhythm
   for (let i = 0; i < singers.length; i++) {
     const m = singers[i];
