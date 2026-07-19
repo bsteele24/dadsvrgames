@@ -42,7 +42,7 @@ canvas{display:block}
 <div id="controls">
 <b>Desktop:</b> W/S drive, A/D turn · hold mouse = feed cannon · hold Space = drill · R = reset<br>
 <b>Mobile:</b> left joystick drives · FEED fires snacks · DRILL digs · drag to look<br>
-<b>VR:</b> left stick drives · LEFT trigger = drill · RIGHT trigger aims &amp; feeds · left grip resets
+<b>VR:</b> left stick drives · LEFT trigger = drill · RIGHT trigger aims &amp; feeds
 </div>
 <div>
 <button id="btnStart" class="bigbtn">START MISSION</button>
@@ -64,8 +64,7 @@ canvas{display:block}
    Mobile:  left joystick drives, ACTION button = fire/dig,
             SWAP button, drag upper screen to look.
    VR:      left stick drives/turns, right controller aims,
-            right trigger = fire/dig, A/B = swap tool,
-            left grip = reset rover.
+            right trigger = fire/dig, A/B = swap tool.
    ============================================================ */
 
 const CFG = {
@@ -440,6 +439,46 @@ function buildBase() {
     cr.position.set(6 + i * 1.7, 0.7, -10 + (i % 2));
     cr.rotation.y = i * 0.5;
     g.add(cr);
+  }
+  // small blue solar panel array (angled toward the sun)
+  {
+    const solar = new THREE.Group();
+    solar.position.set(13, 0, 3);
+    const panelMat = new THREE.MeshLambertMaterial({ color: 0x2b56c9, emissive: 0x0a1e50 });
+    const barMat = new THREE.MeshLambertMaterial({ color: 0x9fb3d8 });
+    const frameMat = new THREE.MeshLambertMaterial({ color: 0xb9c0c8 });
+    const postMat = new THREE.MeshLambertMaterial({ color: 0x888f96 });
+    for (let i = 0; i < 3; i++) {
+      const unit = new THREE.Group();
+      unit.position.set(0, 0, i * 2.7);
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 1.4, 8), postMat);
+      post.position.y = 0.7;
+      unit.add(post);
+      const head = new THREE.Group();
+      head.position.y = 1.4;
+      head.rotation.set(-0.5, 0, -0.28); // tilt up and toward +x, facing the sun
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.1, 1.6), frameMat);
+      head.add(frame);
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(2.05, 0.06, 1.45), panelMat);
+      panel.position.y = 0.06;
+      head.add(panel);
+      // cell grid lines
+      for (let c = -1; c <= 1; c++) {
+        const barZ = new THREE.Mesh(new THREE.BoxGeometry(2.05, 0.08, 0.04), barMat);
+        barZ.position.set(0, 0.1, c * 0.45);
+        head.add(barZ);
+      }
+      const barX = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.08, 1.45), barMat);
+      barX.position.y = 0.1;
+      head.add(barX);
+      unit.add(head);
+      solar.add(unit);
+    }
+    // small combiner/battery box at the foot of the array
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.9), postMat);
+    box.position.set(-1.4, 0.45, -1.2);
+    solar.add(box);
+    g.add(solar);
   }
   // birthday banner between two poles
   const poleMat = new THREE.MeshLambertMaterial({ color: 0xcfd4da });
@@ -1304,7 +1343,6 @@ const keys = {};
 let actFire = false, actDrill = false, mouseDown = false, lastPX = 0, lastPY = 0;
 let joyVec = { x: 0, y: 0 }, joyId = null, lookId = null, fireId = null, drillId = null;
 let ctrlLeft = null, ctrlRight = null, xrSession = null;
-let vrResetPrev = false;
 
 function setupInput() {
   window.addEventListener('keydown', function (e) {
@@ -1467,7 +1505,6 @@ function setupVR() {
 function pollVR() {
   if (!inVR || !xrSession) return { throttle: 0, turn: 0 };
   let throttle = 0, turn = 0;
-  let resetNow = false;
   let sawLeft = false, sawRight = false;
   const sources = xrSession.inputSources;
   for (let i = 0; i < sources.length; i++) {
@@ -1479,7 +1516,6 @@ function pollVR() {
       if (gp.axes.length >= 4) { turn = gp.axes[2]; throttle = -gp.axes[3]; }
       // left trigger = drill
       actDrill = !!(gp.buttons[0] && gp.buttons[0].pressed);
-      if (gp.buttons[1] && gp.buttons[1].pressed) resetNow = true; // left grip
     } else if (src.handedness === 'right') {
       sawRight = true;
       // right trigger = fire food
@@ -1488,8 +1524,6 @@ function pollVR() {
   }
   if (!sawLeft) actDrill = false;
   if (!sawRight) actFire = false;
-  if (resetNow && !vrResetPrev) resetRover();
-  vrResetPrev = resetNow;
   return { throttle: throttle, turn: turn };
 }
 
