@@ -36,6 +36,16 @@
     padding:12px 42px; cursor:pointer; box-shadow:0 6px 0 #b8860b; transition:transform .06s;
   }
   #startBtn:active { transform:translateY(4px); box-shadow:0 2px 0 #b8860b; }
+  #lvlRow { display:flex; gap:12px; justify-content:center; margin-top:18px; }
+  .lvlBtn {
+    font-family:inherit; font-weight:700; font-size:16px; letter-spacing:.5px;
+    background:#fdf6e3; color:#5a5a5a; border:3px solid #b9b2a0; border-radius:12px;
+    padding:10px 18px; cursor:pointer; transition:all .12s;
+  }
+  .lvlBtn.sel {
+    background:#2f6fd0; color:#fff; border-color:#1b3d75; box-shadow:0 4px 0 #1b3d75;
+    transform:translateY(-2px);
+  }
   #vrBtn {
     position:fixed; right:16px; bottom:16px; z-index:60; display:none;
     font-family:inherit; font-weight:700; font-size:16px;
@@ -77,7 +87,11 @@
 <div id="startOverlay">
   <div class="lid">
     <h1>TOYBOX <span>TANK</span></h1>
-    <div class="tag">You've been shrunk. Survive 5 waves to clear the living room.</div>
+    <div class="tag">You've been shrunk. Survive 5 waves to clear the room.</div>
+    <div id="lvlRow">
+      <button class="lvlBtn sel" id="lvl0">LIVING ROOM</button>
+      <button class="lvlBtn" id="lvl1">KITCHEN</button>
+    </div>
     <div id="controls"></div><br>
     <button id="startBtn">ROLL OUT</button>
   </div>
@@ -135,7 +149,8 @@ const CFG = {
     telegraph: 0.9,      // aim glow time before firing
     fireCd: 2.8,
     bulletSpeed: 34,
-    bulletDmg: 8
+    bulletDmg: 8,
+    squishSpeed: 6       // driving over one this fast squishes it
   },
   etank: {
     hp: 2,               // player shell hits to destroy
@@ -152,14 +167,71 @@ const CFG = {
     splash: 4.5,
     dmg: 22,             // damage to player per shell
     firstWave: 2,        // wave they first appear
-    maxCount: 4
+    maxCount: 4,
+    color: 0xd94040, colorDark: 0x9e2b2b, glow: 0xff5522,
+    burst: 1,            // shots per volley
+    burstGap: 0          // seconds between burst shots
+  },
+  mouse: {                // wind-up mouse: melee charger (kitchen)
+    hp: 1,
+    wanderSpeed: 6,
+    chargeSpeed: 26,
+    chargeTurn: 1.6,       // limited steering while charging
+    radius: 1.3,
+    range: 70,             // spots you inside this
+    windupTime: 1.1,       // key-spin telegraph before charging
+    chargeTime: 2.0,
+    recoverTime: 1.4,
+    dmg: 12,               // contact damage
+    squishSpeed: 6         // driving over one this fast kills it
   },
   world: { boundX: 150, boundZ: 130 },   // drivable clamp (half extents)
-  level: { maxWaves: 5 },                 // clear this many waves to beat the level
   gfx: { shadows: true, shadowMap: 2048, dust: 130 },
   vr: { vignette: true, vignetteMax: 0.55 },
   audio: { master: 0.5 }
 };
+
+// Green burst-fire tank: same chassis as red, fires a 2-shot volley.
+CFG.etankG = Object.assign({}, CFG.etank, {
+  color: 0x4caf50, colorDark: 0x2e7d32, glow: 0x9dff5a,
+  hp: 2,
+  telegraph: 1.0,      // slightly quicker to telegraph
+  fireCd: 5.0,         // longer reload to offset the double shot
+  dmg: 15,             // less per shell since two land
+  burst: 2,            // two shots per volley
+  burstGap: 0.22,      // seconds between the pair
+  firstWave: 5,        // debuts on wave 5
+  maxCount: 2
+});
+
+// ---------------- LEVELS ----------------
+// Each level: display name, wave target, room builder, wave composition.
+const LEVELS = [
+  {
+    name: 'LIVING ROOM', maxWaves: 5,
+    build: function () { buildLivingRoom(); },
+    comp: function (n) {
+      return {
+        soldiers: Math.min(CFG.soldier.maxCount, CFG.soldier.baseCount + (n - 1) * 2),
+        red: n >= CFG.etank.firstWave ? Math.min(CFG.etank.maxCount, n - CFG.etank.firstWave + 1) : 0,
+        green: n >= CFG.etankG.firstWave ? CFG.etankG.maxCount : 0,
+        mice: 0
+      };
+    }
+  },
+  {
+    name: 'KITCHEN', maxWaves: 5,
+    build: function () { buildKitchen(); },
+    comp: function (n) {   // tougher mix: everything arrives earlier and heavier
+      return {
+        soldiers: Math.min(18, 8 + (n - 1) * 2),
+        red: Math.min(4, n),                          // tanks from wave 1
+        green: n >= 3 ? Math.min(2, n - 2) : 0,       // green from wave 3
+        mice: n >= 2 ? Math.min(6, 1 + n) : 0         // mice from wave 2
+      };
+    }
+  }
+];
 
 // ---------------- globals ----------------
 let scene, camera, renderer, clock, sun;
@@ -174,7 +246,8 @@ let started = false, isTouch = false;
 let keys = {}, mouseFire = false;
 let joyL = { x: 0, y: 0 }, joyLook = { x: 0, y: 0 }, fireHeld = false;
 let colliders = [];        // {t:'c',x,z,r,h} or {t:'b',x1,z1,x2,z2,h}
-let soldiers = [], shells = [], bullets = [], particles = [];
+let soldiers = [], shells = [], bullets = [], particles = [], mice = [];
+let currentLevel = 0, roomGroup = null;
 let wave = 1, aliveCount = 0, nextWaveT = 0, waveActive = false, won = false;
 let elapsed = 0, msgT = 0;
 const SPAWN = { x: 0, z: 105, yaw: 0 };
@@ -311,9 +384,10 @@ function haptic(handed, intensity, ms) {
   }
 }
 
-// ---------------- room ----------------
-function buildRoom() {
+// ---------------- room: living room (level 1) ----------------
+function buildLivingRoom() {
   const room = new THREE.Group();
+  roomGroup = room;
   scene.add(room);
 
   // hardwood floor (full)
@@ -817,7 +891,7 @@ function drawVRPanel() {
   g.fillStyle = frac > 0.5 ? '#4caf50' : (frac > 0.25 ? '#f7c948' : '#e23b3b');
   g.fillRect(100, 104, 370 * Math.max(0, frac), 30);
   g.fillStyle = '#2b2b2b'; g.font = 'bold 28px Fredoka, sans-serif';
-  g.fillText(won ? 'LEVEL CLEAR!' : 'WAVE ' + wave + ' / ' + CFG.level.maxWaves + '   ·   ENEMIES ' + aliveCount, 30, 175);
+  g.fillText(won ? 'LEVEL CLEAR!' : LEVELS[currentLevel].name + ' · WAVE ' + wave + '/' + LEVELS[currentLevel].maxWaves + ' · ENEMIES ' + aliveCount, 30, 175);
   g.fillStyle = '#5a5a5a'; g.font = '26px Fredoka, sans-serif';
   g.fillText(msgT > 0 ? currentMsg : '', 30, 220);
   vrPanelTex.needsUpdate = true;
@@ -999,7 +1073,7 @@ function updateHUD(dt) {
   document.getElementById('hpFill').style.width = (hp / CFG.player.maxHP * 100) + '%';
   document.getElementById('info').textContent = won
     ? 'LEVEL CLEAR!  \u2013  fire to play again'
-    : 'WAVE ' + wave + ' / ' + CFG.level.maxWaves + '  •  ENEMIES ' + aliveCount;
+    : LEVELS[currentLevel].name + '  •  WAVE ' + wave + ' / ' + LEVELS[currentLevel].maxWaves + '  •  ENEMIES ' + aliveCount;
   if (renderer.xr.isPresenting) {
     vrPanelTimer -= dt;
     if (vrPanelTimer <= 0) { vrPanelTimer = 0.25; drawVRPanel(); }
@@ -1084,6 +1158,22 @@ function fillControls() {
     '<b>VR (Quest):</b> left stick drives · point right controller to aim · trigger fires';
 }
 
+function selectLevel(idx) {
+  if (started) return;                 // selection is title-screen only
+  currentLevel = idx;
+  document.getElementById('lvl0').classList.toggle('sel', idx === 0);
+  document.getElementById('lvl1').classList.toggle('sel', idx === 1);
+  // tear down old room and rebuild
+  if (roomGroup) { scene.remove(roomGroup); roomGroup = null; }
+  colliders.length = 0;
+  dustPts = null;
+  LEVELS[idx].build();
+  // reset tank to spawn
+  hull.position.set(SPAWN.x, 0, SPAWN.z);
+  hullYaw = SPAWN.yaw; hull.rotation.y = hullYaw;
+  speed = 0;
+}
+
 function startGame() {
   if (started) return;
   started = true;
@@ -1132,7 +1222,7 @@ function init() {
 
   clock = new THREE.Clock();
 
-  buildRoom();
+  LEVELS[currentLevel].build();
   buildTank();
   initParticles();
   setupXRControllers();
@@ -1141,6 +1231,8 @@ function init() {
   fillControls();
 
   document.getElementById('startBtn').addEventListener('click', startGame);
+  document.getElementById('lvl0').addEventListener('click', () => selectLevel(0));
+  document.getElementById('lvl1').addEventListener('click', () => selectLevel(1));
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
@@ -1285,6 +1377,12 @@ function explodeShell(pos) {
     const dx = e.g.position.x - pos.x, dz = e.g.position.z - pos.z;
     if (dx * dx + dz * dz < CFG.shell.splash * CFG.shell.splash && pos.y < 7) damageETank(e);
   }
+  for (let i = 0; i < mice.length; i++) {
+    const m = mice[i];
+    if (!m.alive) continue;
+    const dx = m.g.position.x - pos.x, dz = m.g.position.z - pos.z;
+    if (dx * dx + dz * dz < CFG.shell.splash * CFG.shell.splash && pos.y < 7) killMouse(m);
+  }
 }
 function updateShells(dt) {
   for (let i = 0; i < shellPool.length; i++) {
@@ -1314,6 +1412,14 @@ function updateShells(dt) {
       if (!e.alive) continue;
       const dx = p.x - e.g.position.x, dz = p.z - e.g.position.z;
       if (dx * dx + dz * dz < 3.1 * 3.1 && p.y < 4.6) { explodeShell(p); hit = true; break; }
+    }
+    if (hit) { sh.m.visible = false; continue; }
+    // direct hit on a mouse
+    for (let j = 0; j < mice.length; j++) {
+      const mo = mice[j];
+      if (!mo.alive) continue;
+      const dx = p.x - mo.g.position.x, dz = p.z - mo.g.position.z;
+      if (dx * dx + dz * dz < 1.9 * 1.9 && p.y < 3) { explodeShell(p); hit = true; break; }
     }
     if (hit) { sh.m.visible = false; continue; }
     // out of bounds safety
@@ -1432,7 +1538,14 @@ function updateSoldiers(dt) {
     const s = soldiers[i];
     if (!s.alive) continue;
     const dx = hull.position.x - s.g.position.x, dz = hull.position.z - s.g.position.z;
-    const d = dead ? 9999 : Math.sqrt(dx * dx + dz * dz);
+    const rawD = Math.sqrt(dx * dx + dz * dz);
+    // squished under the treads at speed
+    if (rawD < CFG.tank.radius + 1.3 && Math.abs(speed) > cfg.squishSpeed) {
+      killSoldier(s);
+      sfxThunk();
+      continue;
+    }
+    const d = dead ? 9999 : rawD;
 
     if (s.state === 'patrol') {
       if (d < cfg.range) {
@@ -1497,35 +1610,31 @@ function damagePlayer(dmg) {
 }
 
 // ---------------- waves ----------------
+function spawnEnemies(count, clearR, minDist, zMax, fn) {
+  let placed = 0, tries = 0;
+  while (placed < count && tries < 500) {
+    tries++;
+    const x = rand(-140, 140), z = rand(-125, zMax);
+    if (!openSpot(x, z, clearR)) continue;
+    const dx = x - hull.position.x, dz = z - hull.position.z;
+    if (dx * dx + dz * dz < minDist * minDist) continue;
+    fn(x, z);
+    placed++;
+  }
+  return placed;
+}
 function startWave(n) {
   wave = n;
   soldiers = soldiers.filter(s => s.alive);
   etanks = etanks.filter(e => e.alive);
-  const count = Math.min(CFG.soldier.maxCount, CFG.soldier.baseCount + (n - 1) * 2);
-  let placed = 0, tries = 0;
-  while (placed < count && tries < 500) {
-    tries++;
-    const x = rand(-140, 140), z = rand(-125, 45);
-    if (!openSpot(x, z, 2)) continue;
-    const dx = x - hull.position.x, dz = z - hull.position.z;
-    if (dx * dx + dz * dz < 45 * 45) continue;
-    buildSoldier(x, z);
-    placed++;
-  }
-  // enemy tanks roll in from wave CFG.etank.firstWave
-  let tanksPlaced = 0;
-  const nTanks = n >= CFG.etank.firstWave ? Math.min(CFG.etank.maxCount, n - CFG.etank.firstWave + 1) : 0;
-  tries = 0;
-  while (tanksPlaced < nTanks && tries < 500) {
-    tries++;
-    const x = rand(-135, 135), z = rand(-120, 30);
-    if (!openSpot(x, z, 3.6)) continue;
-    const dx = x - hull.position.x, dz = z - hull.position.z;
-    if (dx * dx + dz * dz < 60 * 60) continue;
-    buildETank(x, z);
-    tanksPlaced++;
-  }
-  aliveCount = placed + tanksPlaced;
+  mice = mice.filter(m => m.alive);
+  const c = LEVELS[currentLevel].comp(n);
+  let placed = 0;
+  placed += spawnEnemies(c.soldiers, 2, 45, 45, buildSoldier);
+  placed += spawnEnemies(c.red, 3.6, 60, 30, (x, z) => buildETank(x, z, CFG.etank));
+  placed += spawnEnemies(c.green, 3.6, 60, 30, (x, z) => buildETank(x, z, CFG.etankG));
+  placed += spawnEnemies(c.mice, 1.6, 50, 60, buildMouse);
+  aliveCount = placed;
   waveActive = aliveCount > 0;
   showMsg('WAVE ' + n, 2.5);
   tone('triangle', 220, 90, 0.3, 0.3);
@@ -1555,6 +1664,7 @@ function updateCombat(dt, inp) {
   updateSoldiers(dt);
   updateETanks(dt);
   updateEShells(dt);
+  updateMice(dt);
   updateParticles(dt);
   // regen after a quiet spell
   if (!dead && hp < CFG.player.maxHP && elapsed - lastHitT > CFG.player.regenDelay) {
@@ -1590,7 +1700,7 @@ function sfxClunk() { tone('square', 420, 240, 0.07, 0.28); }
 function checkWaveClear() {
   if (aliveCount <= 0 && waveActive) {
     waveActive = false;
-    if (wave >= CFG.level.maxWaves) {
+    if (wave >= LEVELS[currentLevel].maxWaves) {
       winLevel();
     } else {
       nextWaveT = 5;
@@ -1616,7 +1726,8 @@ function restartLevel() {
   // clear any remaining enemies + projectiles
   for (let i = 0; i < soldiers.length; i++) if (soldiers[i].alive) scene.remove(soldiers[i].g);
   for (let i = 0; i < etanks.length; i++) if (etanks[i].alive) scene.remove(etanks[i].g);
-  soldiers = []; etanks = [];
+  for (let i = 0; i < mice.length; i++) if (mice[i].alive) scene.remove(mice[i].g);
+  soldiers = []; etanks = []; mice = [];
   for (let i = 0; i < shellPool.length; i++) shellPool[i].m.visible = false;
   for (let i = 0; i < eshellPool.length; i++) eshellPool[i].m.visible = false;
   for (let i = 0; i < bulletPool.length; i++) bulletPool[i].m.visible = false;
@@ -1629,9 +1740,10 @@ function restartLevel() {
   startWave(1);
 }
 
-function buildETank(x, z) {
-  const red = plastic(0xd94040, 85);
-  const darkRed = plastic(0x9e2b2b, 85);
+function buildETank(x, z, cfg) {
+  cfg = cfg || CFG.etank;
+  const red = plastic(cfg.color, 85);
+  const darkRed = plastic(cfg.colorDark, 85);
   const cream = plastic(0xf5f2e8, 60);
   const dark = plastic(0x2b2b2b, 25);
   const g = new THREE.Group();
@@ -1667,16 +1779,17 @@ function buildETank(x, z) {
   brake.rotation.x = Math.PI / 2; brake.position.z = -2.95; bp.add(brake);
   const mz = new THREE.Object3D(); mz.position.set(0, 0, -3.25); bp.add(mz);
   const glow = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 6),
-    new THREE.MeshBasicMaterial({ color: 0xff5522, transparent: true, opacity: 0.95 }));
+    new THREE.MeshBasicMaterial({ color: cfg.glow, transparent: true, opacity: 0.95 }));
   glow.visible = false; mz.add(glow);
 
   g.traverse(o => { if (o.isMesh) o.castShadow = true; });
   scene.add(g);
   etanks.push({
-    g: g, tur: tur, bp: bp, mz: mz, glow: glow, tTex: tTex,
-    alive: true, hp: CFG.etank.hp,
+    g: g, tur: tur, bp: bp, mz: mz, glow: glow, tTex: tTex, cfg: cfg,
+    alive: true, hp: cfg.hp,
     state: 'patrol', wp: pickWaypoint(),
-    yaw: yaw0, spd: 0, tTele: 0, tCool: rand(1, 3)
+    yaw: yaw0, spd: 0, tTele: 0, tCool: rand(1, 3),
+    burstLeft: 0, burstTimer: 0
   });
 }
 
@@ -1725,16 +1838,18 @@ function getEShell() {
   return s;
 }
 function etankFire(e) {
+  const cfg = e.cfg || CFG.etank;
   const sh = getEShell();
+  sh.dmg = cfg.dmg; sh.splash = cfg.splash;
   e.mz.getWorldPosition(sh.m.position);
   // lead the player a little, with toy-grade accuracy
   const dNow = Math.hypot(hull.position.x - e.g.position.x, hull.position.z - e.g.position.z);
-  const lead = dNow / CFG.etank.shellSpeed * 0.6;
+  const lead = dNow / cfg.shellSpeed * 0.6;
   const tx = hull.position.x - Math.sin(hullYaw) * speed * lead + rand(-2.2, 2.2);
   const tz = hull.position.z - Math.cos(hullYaw) * speed * lead + rand(-2.2, 2.2);
   const dx = tx - sh.m.position.x, dz = tz - sh.m.position.z;
   const d = Math.max(1, Math.sqrt(dx * dx + dz * dz));
-  const v = CFG.etank.shellSpeed, gg = CFG.shell.gravity;
+  const v = cfg.shellSpeed, gg = CFG.shell.gravity;
   let s2a = gg * d / (v * v);
   if (s2a > 0.98) s2a = 0.98;
   const ang = 0.5 * Math.asin(s2a);       // low-arc ballistic solution
@@ -1745,13 +1860,15 @@ function etankFire(e) {
   spawnBurst(sh.m.position, 0xffa64d, 4, 8, 0.3);
   sfxEFire();
 }
-function explodeEShell(pos) {
+function explodeEShell(sh) {
+  const pos = sh.m.position;
   spawnBurst(pos, 0xffa64d, 9, 14, 0.45);
   spawnBurst(pos, 0x8a8a8a, 5, 9, 0.5);
   sfxBoom();
+  const splash = sh.splash || CFG.etank.splash, dmg = sh.dmg || CFG.etank.dmg;
   const dx = hull.position.x - pos.x, dz = hull.position.z - pos.z;
-  if (dx * dx + dz * dz < CFG.etank.splash * CFG.etank.splash && pos.y < 7) {
-    damagePlayer(CFG.etank.dmg);
+  if (dx * dx + dz * dz < splash * splash && pos.y < 7) {
+    damagePlayer(dmg);
   }
 }
 function updateEShells(dt) {
@@ -1764,11 +1881,11 @@ function updateEShells(dt) {
     sh.m.position.addScaledVector(sh.v, dt);
     const p = sh.m.position;
     if (p.y <= 0.35 || pointHits(p.x, p.y, p.z, 0.4)) {
-      explodeEShell(p); sh.m.visible = false; continue;
+      explodeEShell(sh); sh.m.visible = false; continue;
     }
     const dx = p.x - hull.position.x, dz = p.z - hull.position.z;
     if (dx * dx + dz * dz < 2.6 * 2.6 && p.y > 0.3 && p.y < 5.4) {
-      explodeEShell(p); sh.m.visible = false; continue;
+      explodeEShell(sh); sh.m.visible = false; continue;
     }
     if (Math.abs(p.x) > 170 || Math.abs(p.z) > 150 || p.y > 200) sh.m.visible = false;
   }
@@ -1780,15 +1897,15 @@ function damageETank(e) {
   e.hp--;
   if (e.hp <= 0) { killETank(e); return; }
   V.copy(e.g.position); V.y = 2.5;
-  spawnBurst(V, 0xd94040, 6, 10, 0.4);
+  spawnBurst(V, e.cfg.color, 6, 10, 0.4);
   sfxClunk();
 }
 function killETank(e) {
   if (!e.alive) return;
   e.alive = false;
   V.copy(e.g.position); V.y = 2.2;
-  spawnBurst(V, 0xd94040, 14, 15, 0.6);
-  spawnBurst(V, 0x9e2b2b, 8, 12, 0.5);
+  spawnBurst(V, e.cfg.color, 14, 15, 0.6);
+  spawnBurst(V, e.cfg.colorDark, 8, 12, 0.5);
   spawnBurst(V, 0x2b2b2b, 6, 10, 0.4);
   scene.remove(e.g);
   sfxBoom();
@@ -1798,12 +1915,22 @@ function killETank(e) {
 
 // ---------------- AI ----------------
 function updateETanks(dt) {
-  const cfg = CFG.etank;
   for (let i = 0; i < etanks.length; i++) {
     const e = etanks[i];
     if (!e.alive) continue;
+    const cfg = e.cfg;
     const d = dead ? 9999 :
       Math.hypot(hull.position.x - e.g.position.x, hull.position.z - e.g.position.z);
+
+    // pending burst shots (green tanks fire more than one per volley)
+    if (e.burstLeft > 0) {
+      e.burstTimer -= dt;
+      if (e.burstTimer <= 0) {
+        if (!dead && d < cfg.fireRange + 12) etankFire(e);
+        e.burstLeft--;
+        e.burstTimer = cfg.burstGap;
+      }
+    }
 
     if (e.state === 'patrol') {
       e.glow.visible = false;
@@ -1837,7 +1964,11 @@ function updateETanks(dt) {
         e.glow.scale.setScalar(1 + Math.sin(elapsed * 20) * 0.35);
         if (e.tTele <= 0) {
           e.glow.visible = false;
-          if (d < cfg.fireRange + 6 && !dead) etankFire(e);
+          if (d < cfg.fireRange + 6 && !dead) {
+            etankFire(e);
+            e.burstLeft = (cfg.burst || 1) - 1;   // queue any follow-up shots
+            e.burstTimer = cfg.burstGap;
+          }
           e.tCool = cfg.fireCd * rand(0.85, 1.25);
         }
       } else {
@@ -1848,6 +1979,404 @@ function updateETanks(dt) {
           e.glow.visible = true;
           sfxClunk();
         }
+      }
+    }
+  }
+}
+
+// ============================================================
+// KITCHEN — level 2 room
+// ============================================================
+function buildKitchen() {
+  const room = new THREE.Group();
+  roomGroup = room;
+  scene.add(room);
+
+  // checkered tile floor
+  const tileTex = makeTex(512, 512, (g, w, h) => {
+    const n = 8, s = w / n;
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      g.fillStyle = (x + y) % 2 === 0 ? '#f2ead8' : '#c96f4a';
+      g.fillRect(x * s, y * s, s, s);
+    }
+    g.strokeStyle = 'rgba(0,0,0,0.15)'; g.lineWidth = 3;
+    for (let i = 0; i <= n; i++) {
+      g.beginPath(); g.moveTo(i * s, 0); g.lineTo(i * s, h); g.stroke();
+      g.beginPath(); g.moveTo(0, i * s); g.lineTo(w, i * s); g.stroke();
+    }
+  });
+  tileTex.wrapS = tileTex.wrapT = THREE.RepeatWrapping; tileTex.repeat.set(7, 6);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(340, 300),
+    new THREE.MeshPhongMaterial({ map: tileTex, shininess: 70, specular: 0x555555 }));
+  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
+  room.add(floor);
+
+  // walls + baseboards (pale kitchen yellow)
+  const wallMat = new THREE.MeshLambertMaterial({ color: 0xf0e3b0 });
+  const baseMat = plastic(0xfdfaf2, 30);
+  const wallH = 130;
+  const mkWall = (w, x, z, ry) => {
+    const wa = new THREE.Mesh(new THREE.PlaneGeometry(w, wallH), wallMat);
+    wa.position.set(x, wallH / 2, z); wa.rotation.y = ry; room.add(wa);
+    const bb = new THREE.Mesh(new THREE.BoxGeometry(w, 7, 1.6), baseMat);
+    bb.position.set(x, 3.5, z); bb.rotation.y = ry;
+    bb.translateZ(0.9); room.add(bb);
+  };
+  mkWall(340, 0, -150, 0);
+  mkWall(340, 0, 150, Math.PI);
+  mkWall(300, -170, 0, Math.PI / 2);
+  mkWall(300, 170, 0, -Math.PI / 2);
+
+  // ---- sink counter run (north wall) ----
+  const cabMat = plastic(0xf2ede0, 35);
+  const cabDark = plastic(0xd8cfba, 25);
+  const counterMat = plastic(0x8a8a92, 65);
+  const steel = plastic(0xb8bcc2, 95);
+  const cab = new THREE.Mesh(new THREE.BoxGeometry(170, 86, 30), cabMat);
+  cab.position.set(-65, 43, -135); room.add(cab);
+  // cabinet door panels + handles
+  for (let i = 0; i < 4; i++) {
+    const px = -135 + i * 43;
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(36, 66, 1.2), cabDark);
+    panel.position.set(px, 40, -119.2); room.add(panel);
+    const hdl = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 8, 8), steel);
+    hdl.position.set(px + 13, 62, -118.2); room.add(hdl);
+  }
+  const counter = new THREE.Mesh(new THREE.BoxGeometry(174, 4, 34), counterMat);
+  counter.position.set(-65, 88, -134); counter.castShadow = true; room.add(counter);
+  addBox(-152, -150, 22, -119, 200);
+  // faucet over the sink
+  const fBase = new THREE.Mesh(new THREE.CylinderGeometry(2, 2.6, 3, 10), steel);
+  fBase.position.set(-100, 91.5, -140); room.add(fBase);
+  const fPole = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 16, 10), steel);
+  fPole.position.set(-100, 100, -140); room.add(fPole);
+  const fArm = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 12, 10), steel);
+  fArm.rotation.x = Math.PI / 2; fArm.position.set(-100, 108, -134.5); room.add(fArm);
+  const fTip = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.5, 4, 10), steel);
+  fTip.position.set(-100, 106, -129); room.add(fTip);
+  // sink basin hint (dark inset on the countertop)
+  const basin = new THREE.Mesh(new THREE.PlaneGeometry(34, 22),
+    new THREE.MeshPhongMaterial({ color: 0x6a6a72, shininess: 90 }));
+  basin.rotation.x = -Math.PI / 2; basin.position.set(-100, 90.2, -136); room.add(basin);
+  // window over the sink
+  const winFrame = new THREE.Mesh(new THREE.BoxGeometry(50, 40, 2), plastic(0xfdfaf2, 40));
+  winFrame.position.set(-100, 112, -149); room.add(winFrame);
+  const winSky = new THREE.Mesh(new THREE.PlaneGeometry(44, 34),
+    new THREE.MeshBasicMaterial({ color: 0xbfe3ff }));
+  winSky.position.set(-100, 112, -147.8); room.add(winSky);
+
+  // ---- oven / stove ----
+  const oven = new THREE.Mesh(new THREE.BoxGeometry(55, 86, 30), steel);
+  oven.position.set(67, 43, -135); oven.castShadow = true; room.add(oven);
+  const ovenGlass = new THREE.Mesh(new THREE.PlaneGeometry(40, 26),
+    new THREE.MeshPhongMaterial({ color: 0x14141a, shininess: 120, specular: 0x666666 }));
+  ovenGlass.position.set(67, 38, -119.8); room.add(ovenGlass);
+  const ovenHandle = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 46, 10), steel);
+  ovenHandle.rotation.z = Math.PI / 2; ovenHandle.position.set(67, 60, -117.5); room.add(ovenHandle);
+  // knobs
+  for (let i = 0; i < 4; i++) {
+    const kn = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 1.6, 10), plastic(0x2b2b2b, 40));
+    kn.rotation.x = Math.PI / 2; kn.position.set(52 + i * 10, 76, -119.4); room.add(kn);
+  }
+  // stovetop + burners
+  const stovetop = new THREE.Mesh(new THREE.BoxGeometry(55, 2.5, 30), plastic(0x1e1e24, 80));
+  stovetop.position.set(67, 88, -134); room.add(stovetop);
+  [[55, -140], [79, -140]].forEach(b => {
+    const burner = new THREE.Mesh(new THREE.TorusGeometry(6, 1.2, 8, 20), plastic(0x0c0c10, 30));
+    burner.rotation.x = Math.PI / 2; burner.position.set(b[0], 89.6, b[1]); room.add(burner);
+  });
+  addBox(40, -150, 95, -119, 200);
+
+  // ---- door (south wall) ----
+  const doorMat = plastic(0x9a6a3a, 45);
+  const doorSlab = new THREE.Mesh(new THREE.BoxGeometry(46, 112, 4), doorMat);
+  doorSlab.position.set(60, 56, 148); room.add(doorSlab);
+  // frame
+  [[-26, 0, 4, 118], [26, 0, 4, 118], [0, 58, 56, 5]].forEach(f => {
+    const fr = new THREE.Mesh(new THREE.BoxGeometry(f[2], f[3], 5), plastic(0xfdfaf2, 40));
+    fr.position.set(60 + f[0], f[1] === 0 ? 59 : f[1] + 59, 148); room.add(fr);
+  });
+  // panels + knob
+  [[0, 30], [0, 74]].forEach(p => {
+    const pn = new THREE.Mesh(new THREE.BoxGeometry(32, 32, 1), plastic(0x8a5a2e, 35));
+    pn.position.set(60 + p[0], p[1], 145.6); room.add(pn);
+  });
+  const knob = new THREE.Mesh(new THREE.SphereGeometry(2.4, 12, 10), plastic(0xc9a227, 110));
+  knob.position.set(42, 48, 145.3); room.add(knob);
+  // doormat
+  const mat = new THREE.Mesh(new THREE.PlaneGeometry(56, 28),
+    new THREE.MeshPhongMaterial({ color: 0x7a3030, shininess: 4 }));
+  mat.rotation.x = -Math.PI / 2; mat.position.set(60, 0.14, 126); mat.receiveShadow = true;
+  room.add(mat);
+
+  // ---- kitchen table (tall — a roof over the battlefield) ----
+  const woodMat = plastic(0x8a5a2b, 50);
+  const tTop = new THREE.Mesh(new THREE.BoxGeometry(110, 4, 70), woodMat);
+  tTop.position.set(0, 96, -10); tTop.castShadow = true; room.add(tTop);
+  [[-46, -36], [46, -36], [-46, 16], [46, 16]].forEach(l => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 2.8, 94, 12), woodMat);
+    leg.position.set(l[0], 47, -10 + l[1]); leg.castShadow = true; room.add(leg);
+    addCircle(l[0], -10 + l[1], 3.5, 96);
+  });
+
+  // ---- chairs (leg forests you can weave through) ----
+  function buildChair(cx, cz, ry) {
+    const ch = new THREE.Group(); ch.position.set(cx, 0, cz); ch.rotation.y = ry;
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(24, 3, 24), woodMat);
+    seat.position.y = 45; seat.castShadow = true; ch.add(seat);
+    [[-9, -9], [9, -9], [-9, 9], [9, 9]].forEach(l => {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.2, 44, 10), woodMat);
+      leg.position.set(l[0], 22, l[1]); leg.castShadow = true; ch.add(leg);
+      // collider must be in world space: rotate the local leg offset
+      const wx = cx + l[0] * Math.cos(ry) + l[1] * Math.sin(ry);
+      const wz = cz - l[0] * Math.sin(ry) + l[1] * Math.cos(ry);
+      addCircle(wx, wz, 1.7, 46);
+    });
+    // chair back
+    [[-9], [9]].forEach(p => {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 40, 8), woodMat);
+      post.position.set(p[0], 65, 10); ch.add(post);
+    });
+    [[58], [70], [82]].forEach(s => {
+      const slat = new THREE.Mesh(new THREE.BoxGeometry(20, 4, 2), woodMat);
+      slat.position.set(0, s[0], 10); ch.add(slat);
+    });
+    room.add(ch);
+  }
+  buildChair(-30, 42, Math.PI);
+  buildChair(34, 44, Math.PI + 0.3);
+  buildChair(-34, -64, 0.15);
+  buildChair(36, -66, -0.2);
+
+  // ---- spilled food ----
+  // milk puddle + tipped cup
+  const puddle = new THREE.Mesh(new THREE.CircleGeometry(17, 24),
+    new THREE.MeshPhongMaterial({ color: 0xfdfdf6, shininess: 120, specular: 0xaaaaaa }));
+  puddle.rotation.x = -Math.PI / 2; puddle.scale.set(1.4, 1, 1);
+  puddle.position.set(-70, 0.15, 62); room.add(puddle);
+  const cup = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 3.8, 12, 14, 1, true),
+    new THREE.MeshPhongMaterial({ color: 0xd9ecf5, shininess: 100, transparent: true, opacity: 0.6, side: THREE.DoubleSide }));
+  cup.rotation.z = Math.PI / 2 - 0.15; cup.position.set(-92, 4, 58); cup.castShadow = true;
+  room.add(cup);
+  addCircle(-92, 58, 5.5, 8);
+
+  // tipped cereal bowl + scattered cereal rings
+  const bowl = new THREE.Mesh(new THREE.SphereGeometry(9, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+    plastic(0x2f6fd0, 60));
+  bowl.rotation.z = 2.4; bowl.position.set(72, 4.5, 62); bowl.castShadow = true;
+  room.add(bowl);
+  addCircle(72, 62, 9.5, 10);
+  const cerealCols = [0xd9a24f, 0xc9803a, 0xe0b866];
+  for (let i = 0; i < 12; i++) {
+    const x = 52 + rand(-8, 40), z = 48 + rand(-8, 34);
+    if (pointHits(x, 1, z, 2)) continue;
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(2.1, 0.9, 8, 16),
+      plastic(cerealCols[i % 3], 20));
+    const standing = Math.random() < 0.25;
+    if (standing) { ring.position.set(x, 2.1, z); ring.rotation.y = rand(0, Math.PI); }
+    else { ring.rotation.x = Math.PI / 2; ring.position.set(x, 0.95, z); }
+    ring.castShadow = true; room.add(ring);
+    addCircle(x, z, 2.8, 3.5);
+  }
+
+  // spilled peas
+  for (let i = 0; i < 8; i++) {
+    const x = rand(-24, 20), z = rand(66, 96);
+    if (pointHits(x, 1, z, 1.5)) continue;
+    const pea = new THREE.Mesh(new THREE.SphereGeometry(1.2, 10, 8), plastic(0x5da344, 40));
+    pea.position.set(x, 1.2, z); pea.castShadow = true; room.add(pea);
+    addCircle(x, z, 1.4, 2.5);
+  }
+
+  // fallen fork + spoon (giant scale cues)
+  const silver = plastic(0xc4c8ce, 120);
+  const fork = new THREE.Group(); fork.position.set(-100, 0.8, 6); fork.rotation.y = 0.5;
+  const fHandle = new THREE.Mesh(new THREE.BoxGeometry(3, 1.2, 17), silver);
+  fHandle.position.z = 6; fork.add(fHandle);
+  const fHead = new THREE.Mesh(new THREE.BoxGeometry(5.5, 1, 4), silver);
+  fHead.position.z = -3.5; fork.add(fHead);
+  for (let i = 0; i < 4; i++) {
+    const tine = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.9, 5.5), silver);
+    tine.position.set(-2 + i * 1.35, 0, -8); fork.add(tine);
+  }
+  fork.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  room.add(fork);
+  addCircle(-100, 6, 4, 2.5);
+  const spoon = new THREE.Group(); spoon.position.set(-114, 0.8, 24); spoon.rotation.y = -0.4;
+  const sHandle = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.1, 15), silver);
+  sHandle.position.z = 5; spoon.add(sHandle);
+  const sBowl = new THREE.Mesh(new THREE.SphereGeometry(4, 14, 10), silver);
+  sBowl.scale.set(1, 0.35, 1.3); sBowl.position.z = -5; spoon.add(sBowl);
+  spoon.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  room.add(spoon);
+  addCircle(-114, 24, 4, 2.5);
+
+  // banana peel
+  const peel = new THREE.Group(); peel.position.set(96, 0, -44);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2, 2.4, 8), plastic(0xe8d44f, 25));
+  hub.position.y = 1.6; peel.add(hub);
+  for (let i = 0; i < 4; i++) {
+    const petal = new THREE.Mesh(new THREE.BoxGeometry(3, 0.6, 9), plastic(0xf0dd58, 25));
+    const a = i * Math.PI / 2 + 0.4;
+    petal.position.set(Math.sin(a) * 5, 0.5, Math.cos(a) * 5);
+    petal.rotation.y = a; petal.rotation.x = 0.12;
+    peel.add(petal);
+  }
+  peel.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  room.add(peel);
+  addCircle(96, -44, 4.5, 3);
+
+  // a couple of dropped toy blocks for cover parity with level 1
+  const blockCols = [0xe23b3b, 0xf7c948, 0x9b59b6];
+  [[-60, -70], [-48, -62], [90, 30]].forEach((b, i) => {
+    const blk = new THREE.Mesh(new THREE.BoxGeometry(7.5, 7.5, 7.5), plastic(blockCols[i], 25));
+    blk.position.set(b[0], 3.75, b[1]); blk.rotation.y = rand(0, 1.5);
+    blk.castShadow = true; blk.receiveShadow = true; room.add(blk);
+    addCircle(b[0], b[1], 5.4, 8);
+  });
+}
+
+// ============================================================
+// WIND-UP MOUSE — fast melee charger (kitchen enemy)
+// ============================================================
+function sfxTick() { tone('square', 1500, 1350, 0.03, 0.12); }
+function sfxSqueak() { tone('sine', 1300, 480, 0.16, 0.3); }
+
+function buildMouse(x, z) {
+  const gray = plastic(0x9a9a9a, 45);
+  const pink = plastic(0xf2a0b5, 30);
+  const gold = plastic(0xc9a227, 110);
+  const g = new THREE.Group();
+  g.position.set(x, 0, z);
+  g.rotation.y = rand(0, Math.PI * 2);
+
+  const body = new THREE.Mesh(new THREE.SphereGeometry(1.1, 14, 10), gray);
+  body.scale.set(0.9, 0.85, 1.5); body.position.y = 1.0; g.add(body);
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), pink);
+  nose.position.set(0, 0.95, -1.7); g.add(nose);
+  [-1, 1].forEach(sgn => {
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.48, 10, 8), pink);
+    ear.scale.z = 0.35; ear.position.set(sgn * 0.5, 1.75, -0.85); g.add(ear);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.14, 6, 5),
+      new THREE.MeshBasicMaterial({ color: 0x111111 }));
+    eye.position.set(sgn * 0.3, 1.3, -1.4); g.add(eye);
+  });
+  const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 2.4, 6), pink);
+  tail.rotation.x = -1.1; tail.position.set(0, 1.35, 1.9); g.add(tail);
+
+  // wind-up key sticking out the back — spins as a telegraph
+  const key = new THREE.Group(); key.position.set(0, 1.15, 1.55); g.add(key);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.8, 8), gold);
+  shaft.rotation.x = Math.PI / 2; shaft.position.z = 0.3; key.add(shaft);
+  [-1, 1].forEach(sgn => {
+    const bow = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.3, 0.16), gold);
+    bow.position.set(0, sgn * 0.55, 0.75); key.add(bow);
+  });
+
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  scene.add(g);
+  mice.push({
+    g: g, key: key, alive: true,
+    state: 'wander', wp: pickWaypoint(),
+    yaw: g.rotation.y, t: 0, tickT: 0, keySpin: 0,
+    waddPh: rand(0, 6)
+  });
+}
+
+function killMouse(m) {
+  if (!m.alive) return;
+  m.alive = false;
+  V.copy(m.g.position); V.y = 1.2;
+  spawnBurst(V, 0x9a9a9a, 8, 11, 0.45);
+  spawnBurst(V, 0xf2a0b5, 4, 8, 0.35);
+  spawnBurst(V, 0xc9a227, 2, 9, 0.3);
+  scene.remove(m.g);
+  sfxSqueak();
+  aliveCount--;
+  checkWaveClear();
+}
+
+function mouseStep(m, spd, dt, steerLimit) {
+  const cfg = CFG.mouse;
+  // steer toward the player (or waypoint) within the limit
+  let tx, tz;
+  if (m.state === 'charge') { tx = hull.position.x; tz = hull.position.z; }
+  else if (m.wp) { tx = m.wp.x; tz = m.wp.z; }
+  else return;
+  const desired = yawToward(m.g.position.x, m.g.position.z, tx, tz);
+  const step = steerLimit * dt;
+  m.yaw = wrapAngle(m.yaw + clamp(wrapAngle(desired - m.yaw), -step, step));
+  const nx = m.g.position.x - Math.sin(m.yaw) * spd * dt;
+  const nz = m.g.position.z - Math.cos(m.yaw) * spd * dt;
+  const r = resolveCircle(nx, nz, cfg.radius);
+  // hitting something during a charge ends the charge
+  if (m.state === 'charge' && Math.abs(r.x - nx) + Math.abs(r.z - nz) > 0.06) {
+    m.state = 'recover'; m.t = cfg.recoverTime;
+  }
+  if (m.state === 'wander' && Math.abs(r.x - nx) + Math.abs(r.z - nz) > 0.04) {
+    m.wp = pickWaypoint();
+  }
+  m.g.position.x = r.x; m.g.position.z = r.z;
+  m.g.rotation.y = m.yaw;
+  m.g.rotation.z = Math.sin(elapsed * 14 + m.waddPh) * 0.08; // scurry waddle
+}
+
+function updateMice(dt) {
+  const cfg = CFG.mouse;
+  for (let i = 0; i < mice.length; i++) {
+    const m = mice[i];
+    if (!m.alive) continue;
+    const dx = hull.position.x - m.g.position.x, dz = hull.position.z - m.g.position.z;
+    const d = Math.sqrt(dx * dx + dz * dz);
+
+    // squished by the tank at speed (any state)
+    if (d < CFG.tank.radius + cfg.radius + 0.2 && Math.abs(speed) > cfg.squishSpeed) {
+      killMouse(m);
+      sfxThunk();
+      continue;
+    }
+
+    // key spin speed by state
+    const spinRate = m.state === 'windup' ? 22 : (m.state === 'charge' ? 14 : 4);
+    m.keySpin += spinRate * dt;
+    m.key.rotation.z = m.keySpin;
+
+    if (m.state === 'wander') {
+      if (!dead && d < cfg.range) {
+        m.state = 'windup'; m.t = cfg.windupTime; m.tickT = 0;
+      } else {
+        if (!m.wp || Math.hypot(m.wp.x - m.g.position.x, m.wp.z - m.g.position.z) < 3) m.wp = pickWaypoint();
+        mouseStep(m, cfg.wanderSpeed, dt, 3.5);
+      }
+    } else if (m.state === 'windup') {
+      // face the player while the key winds
+      const desired = yawToward(m.g.position.x, m.g.position.z, hull.position.x, hull.position.z);
+      m.yaw = wrapAngle(m.yaw + wrapAngle(desired - m.yaw) * Math.min(1, dt * 8));
+      m.g.rotation.y = m.yaw;
+      m.tickT -= dt;
+      if (m.tickT <= 0) { sfxTick(); m.tickT = 0.22; }
+      m.t -= dt;
+      if (m.t <= 0) { m.state = 'charge'; m.t = cfg.chargeTime; }
+    } else if (m.state === 'charge') {
+      mouseStep(m, cfg.chargeSpeed, dt, cfg.chargeTurn);
+      // contact with the tank
+      if (!dead && d < CFG.tank.radius + cfg.radius + 0.4) {
+        damagePlayer(cfg.dmg);
+        // bounce back off the hull
+        const bx = m.g.position.x - hull.position.x, bz = m.g.position.z - hull.position.z;
+        const bd = Math.max(0.1, Math.sqrt(bx * bx + bz * bz));
+        m.g.position.x += (bx / bd) * 4;
+        m.g.position.z += (bz / bd) * 4;
+        m.state = 'recover'; m.t = cfg.recoverTime;
+        continue;
+      }
+      m.t -= dt;
+      if (m.t <= 0) { m.state = 'recover'; m.t = cfg.recoverTime; }
+    } else { // recover
+      m.t -= dt;
+      if (m.t <= 0) {
+        if (!dead && d < cfg.range) { m.state = 'windup'; m.t = cfg.windupTime; m.tickT = 0; }
+        else { m.state = 'wander'; m.wp = pickWaypoint(); }
       }
     }
   }

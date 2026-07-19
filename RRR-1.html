@@ -16,7 +16,7 @@ canvas{display:block}
 #knob{position:absolute;left:36px;top:36px;width:48px;height:48px;border-radius:50%;background:rgba(255,190,120,.55);border:2px solid rgba(255,255,255,.5);pointer-events:none}
 .mbtn{position:fixed;z-index:6;border-radius:50%;background:rgba(255,140,60,.3);border:2px solid rgba(255,200,150,.55);color:#fff;font-weight:800;display:none;align-items:center;justify-content:center;text-shadow:0 1px 2px #000}
 #btnAct{right:22px;bottom:34px;width:88px;height:88px;font-size:15px}
-#btnSwap{right:128px;bottom:50px;width:60px;height:60px;font-size:11px}
+#btnSwap{right:128px;bottom:50px;width:72px;height:72px;font-size:13px;background:rgba(110,220,110,.28);border-color:rgba(170,255,170,.55)}
 #btnReset{right:34px;bottom:140px;width:48px;height:48px;font-size:10px;background:rgba(120,160,255,.28)}
 #overlay{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;background:radial-gradient(ellipse at 50% 35%,#7a2f14 0%,#3a1408 60%,#1a0a05 100%);color:#ffe8d0;padding:20px}
 #title{font-size:clamp(30px,7vw,64px);font-weight:900;color:#ffd94d;text-shadow:0 4px 0 #a03516,0 8px 22px #000;letter-spacing:1px;margin:0 0 6px}
@@ -29,20 +29,20 @@ canvas{display:block}
 </style>
 </head>
 <body>
-<div id="hud"><span id="log">Samples 0/8 · Fed 0/6 · Sites 0/3</span><span id="tool">TOOL: SCOOP ARM</span></div>
+<div id="hud"><span id="log">Samples 0/8 · Fed 0/6 · Sites 0/3</span><span id="tool">DRILL + FEED — no tool swapping</span></div>
 <div id="toast"></div>
 <div id="big"></div>
 <div id="joy"><div id="knob"></div></div>
-<div id="btnAct" class="mbtn">ACTION</div>
-<div id="btnSwap" class="mbtn">SWAP</div>
+<div id="btnAct" class="mbtn">FEED</div>
+<div id="btnSwap" class="mbtn">DRILL</div>
 <div id="btnReset" class="mbtn">RESET</div>
 <div id="overlay">
 <h1 id="title">REID'S RED PLANET ROVER</h1>
 <p id="subtitle">Dig up weird samples · Feed hungry martians · Discover the Red Planet</p>
 <div id="controls">
-<b>Desktop:</b> W/S drive, A/D turn · hold mouse or Space = dig / fire · Tab = swap tool · R = reset<br>
-<b>Mobile:</b> left joystick drives · ACTION digs/fires · SWAP changes tool · drag to look<br>
-<b>VR:</b> left stick drives · right controller aims · trigger digs/fires · A/B swaps · left grip resets
+<b>Desktop:</b> W/S drive, A/D turn · hold mouse = feed cannon · hold Space = drill · R = reset<br>
+<b>Mobile:</b> left joystick drives · FEED fires snacks · DRILL digs · drag to look<br>
+<b>VR:</b> left stick drives · LEFT trigger = drill · RIGHT trigger aims &amp; feeds · left grip resets
 </div>
 <div>
 <button id="btnStart" class="bigbtn">START MISSION</button>
@@ -545,26 +545,14 @@ function buildRover() {
       wheels.push(w);
     }
   }
-  // camera mast at the front
-  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 1.5, 8), bodyMat);
-  mast.position.set(0.6, 2.2, 1.5);
-  rover.add(mast);
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.35, 0.3), bodyMat);
-  head.position.set(0.6, 3.05, 1.5);
-  rover.add(head);
-  const lensMat = new THREE.MeshBasicMaterial({ color: 0x223344 });
-  for (let s = -1; s <= 1; s += 2) {
-    const lens = new THREE.Mesh(new THREE.CircleGeometry(0.09, 10), lensMat);
-    lens.position.set(0.6 + s * 0.14, 3.05, 1.66);
-    rover.add(lens);
-  }
+  // (mastcam removed — it blocked the rider's forward view)
   // ---- both tools mount at the FRONT of the deck, always visible so the
   //      rider can see the drill arm stick out ahead and watch the cannon fire.
   const armMat = new THREE.MeshLambertMaterial({ color: 0xb8bec4 });
 
-  // === science drill arm (front-left) ===
+  // === science drill arm (rider's LEFT — matches the left controller) ===
   scoopArm = new THREE.Group();
-  scoopArm.position.set(-0.72, 1.5, 1.5);
+  scoopArm.position.set(0.72, 1.5, 1.5);
   // shoulder mount
   const shoulder = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.3, 0.3, 12), orange);
   scoopArm.add(shoulder);
@@ -595,9 +583,9 @@ function buildRover() {
   scoopArm.add(drillHead);
   rover.add(scoopArm);
 
-  // === food cannon on a yaw pivot (front-right) ===
+  // === food cannon on a yaw pivot (rider's RIGHT — matches the right controller) ===
   cannon = new THREE.Group();
-  cannon.position.set(0.72, 1.55, 1.35);
+  cannon.position.set(-0.72, 1.55, 1.35);
   const cannonBase = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.32, 0.28, 12), orange);
   cannon.add(cannonBase);
   const hopper = new THREE.Mesh(new THREE.SphereGeometry(0.4, 12, 10), new THREE.MeshLambertMaterial({ color: 0xffb347 }));
@@ -625,37 +613,24 @@ function buildRover() {
   cannon.add(cannonBarrel);
   rover.add(cannon);
 
-  // active-tool highlight ring that sits beneath whichever tool is selected
+  // glow ring under the drill: lights up when a dig site is in range
   toolGlow = new THREE.Mesh(
     new THREE.TorusGeometry(0.42, 0.06, 8, 20),
     new THREE.MeshBasicMaterial({ color: 0x7fe36b })
   );
   toolGlow.rotation.x = -Math.PI / 2;
-  toolGlow.position.set(-0.72, 1.38, 1.5);
+  toolGlow.position.set(0.72, 1.38, 1.5);
+  toolGlow.visible = false;
   rover.add(toolGlow);
   addBlobShadow(rover, 2.1);
   scene.add(rover);
-  roverState = { x: 0, z: 14, yaw: Math.PI, speed: 0, tool: 'scoop', cool: 0, digSnd: 0 };
+  roverState = { x: 0, z: 14, yaw: Math.PI, speed: 0, cool: 0, digSnd: 0 };
 }
 
 function resetRover() {
   roverState.x = 0; roverState.z = 14; roverState.yaw = Math.PI; roverState.speed = 0;
   camYaw = Math.PI;
   toast('Rover reset to base camp');
-}
-
-function swapTool() {
-  roverState.tool = (roverState.tool === 'scoop') ? 'cannon' : 'scoop';
-  // both tools stay visible; the glow ring marks which one is active
-  if (roverState.tool === 'scoop') {
-    toolGlow.position.set(-0.72, 1.38, 1.5);
-    toolGlow.material.color.set(0x7fe36b);
-  } else {
-    toolGlow.position.set(0.72, 1.4, 1.35);
-    toolGlow.material.color.set(0xff8a3c);
-  }
-  sfxClick();
-  hudDirty = true;
 }
 
 /* ---------- martians ---------- */
@@ -1136,29 +1111,28 @@ function honkBirthday() {
 
 /* ---------- input ---------- */
 const keys = {};
-let action = false, mouseDown = false, lastPX = 0, lastPY = 0;
-let joyVec = { x: 0, y: 0 }, joyId = null, lookId = null;
+let actFire = false, actDrill = false, mouseDown = false, lastPX = 0, lastPY = 0;
+let joyVec = { x: 0, y: 0 }, joyId = null, lookId = null, fireId = null, drillId = null;
 let ctrlLeft = null, ctrlRight = null, xrSession = null;
-let vrSwapPrev = false, vrResetPrev = false;
+let vrResetPrev = false;
 
 function setupInput() {
   window.addEventListener('keydown', function (e) {
     keys[e.code] = true;
-    if (e.code === 'Tab' || e.code === 'KeyQ') { e.preventDefault(); swapTool(); }
     if (e.code === 'KeyR') resetRover();
-    if (e.code === 'Space' || e.code === 'KeyE') { e.preventDefault(); action = true; }
+    if (e.code === 'Space' || e.code === 'KeyE') { e.preventDefault(); actDrill = true; }
   });
   window.addEventListener('keyup', function (e) {
     keys[e.code] = false;
-    if (e.code === 'Space' || e.code === 'KeyE') action = false;
+    if (e.code === 'Space' || e.code === 'KeyE') actDrill = false;
   });
   const cv = renderer.domElement;
   cv.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   cv.addEventListener('mousedown', function (e) {
     mouseDown = true; lastPX = e.clientX; lastPY = e.clientY;
-    if (e.button === 0) action = true;
+    if (e.button === 0) actFire = true;
   });
-  window.addEventListener('mouseup', function () { mouseDown = false; action = keys['Space'] || keys['KeyE'] || false; });
+  window.addEventListener('mouseup', function () { mouseDown = false; actFire = false; });
   window.addEventListener('mousemove', function (e) {
     if (!mouseDown) return;
     camYaw -= (e.clientX - lastPX) * 0.005;
@@ -1171,12 +1145,12 @@ function setupInput() {
 function setupTouch() {
   const joy = document.getElementById('joy');
   const knob = document.getElementById('knob');
-  const btnAct = document.getElementById('btnAct');
-  const btnSwap = document.getElementById('btnSwap');
+  const btnFeed = document.getElementById('btnAct');
+  const btnDrill = document.getElementById('btnSwap');
   const btnReset = document.getElementById('btnReset');
   joy.style.display = 'block';
-  btnAct.style.display = 'flex';
-  btnSwap.style.display = 'flex';
+  btnFeed.style.display = 'flex';
+  btnDrill.style.display = 'flex';
   btnReset.style.display = 'flex';
   function joyCenter() {
     const r = joy.getBoundingClientRect();
@@ -1191,10 +1165,10 @@ function setupTouch() {
       const el = document.elementFromPoint(t.clientX, t.clientY);
       if (el === joy || el === knob) {
         joyId = t.identifier;
-      } else if (el === btnAct) {
-        action = true;
-      } else if (el === btnSwap) {
-        swapTool();
+      } else if (el === btnFeed) {
+        fireId = t.identifier; actFire = true;
+      } else if (el === btnDrill) {
+        drillId = t.identifier; actDrill = true;
       } else if (el === btnReset) {
         resetRover();
       } else if (lookId === null) {
@@ -1225,14 +1199,13 @@ function setupTouch() {
       const t = e.changedTouches[i];
       if (t.identifier === joyId) { joyId = null; joyVec.x = 0; joyVec.y = 0; setKnob(0, 0); }
       if (t.identifier === lookId) lookId = null;
+      if (t.identifier === fireId) { fireId = null; actFire = false; }
+      if (t.identifier === drillId) { drillId = null; actDrill = false; }
     }
-    if (e.touches.length === 0) action = false;
+    if (e.touches.length === 0) { actFire = false; actDrill = false; }
   }
   window.addEventListener('touchend', endTouch);
   window.addEventListener('touchcancel', endTouch);
-  // keep ACTION pressed while finger stays on the button
-  btnAct.addEventListener('touchstart', function (e) { e.preventDefault(); action = true; }, { passive: false });
-  btnAct.addEventListener('touchend', function () { action = false; });
 }
 
 /* ---------- VR ---------- */
@@ -1304,23 +1277,27 @@ function setupVR() {
 function pollVR() {
   if (!inVR || !xrSession) return { throttle: 0, turn: 0 };
   let throttle = 0, turn = 0;
-  let swapNow = false, resetNow = false;
+  let resetNow = false;
+  let sawLeft = false, sawRight = false;
   const sources = xrSession.inputSources;
   for (let i = 0; i < sources.length; i++) {
     const src = sources[i];
     if (!src.gamepad) continue;
     const gp = src.gamepad;
     if (src.handedness === 'left') {
+      sawLeft = true;
       if (gp.axes.length >= 4) { turn = gp.axes[2]; throttle = -gp.axes[3]; }
+      // left trigger = drill
+      actDrill = !!(gp.buttons[0] && gp.buttons[0].pressed);
       if (gp.buttons[1] && gp.buttons[1].pressed) resetNow = true; // left grip
     } else if (src.handedness === 'right') {
-      if (gp.buttons[0] && gp.buttons[0].pressed) action = true;
-      else if (!keys['Space']) action = false;
-      if ((gp.buttons[4] && gp.buttons[4].pressed) || (gp.buttons[5] && gp.buttons[5].pressed)) swapNow = true; // A/B
+      sawRight = true;
+      // right trigger = fire food
+      actFire = !!(gp.buttons[0] && gp.buttons[0].pressed);
     }
   }
-  if (swapNow && !vrSwapPrev) swapTool();
-  vrSwapPrev = swapNow;
+  if (!sawLeft) actDrill = false;
+  if (!sawRight) actFire = false;
   if (resetNow && !vrResetPrev) resetRover();
   vrResetPrev = resetNow;
   return { throttle: throttle, turn: turn };
@@ -1376,8 +1353,7 @@ function drawDash() {
   ctx.fillText('Samples ' + samples + '/' + CFG.DIG_SITES + '   Fed ' + Math.min(fedCount, CFG.MARTIANS_TO_FEED) + '/' + CFG.MARTIANS_TO_FEED + '   Sites ' + foundCount + '/3', 28, 48);
   ctx.font = 'bold 34px sans-serif';
   ctx.fillStyle = '#ffd27a';
-  const toolTxt = roverState.tool === 'scoop' ? 'TOOL: SCOOP ARM' : 'TOOL: FOOD CANNON';
-  ctx.fillText(toolTxt + (bonusCount > 0 ? '   Bonus x' + bonusCount : ''), 28, 104);
+  ctx.fillText('L TRIGGER: DRILL   R TRIGGER: FEED' + (bonusCount > 0 ? '   Bonus x' + bonusCount : ''), 28, 104);
   if (vrMsg && elapsed < vrMsgUntil) {
     ctx.fillStyle = '#aef0a0';
     ctx.font = 'bold 30px sans-serif';
@@ -1392,8 +1368,9 @@ function refreshHUD() {
     ' · Fed ' + Math.min(fedCount, CFG.MARTIANS_TO_FEED) + '/' + CFG.MARTIANS_TO_FEED +
     ' · Sites ' + foundCount + '/3' +
     (bonusCount > 0 ? ' · Bonus x' + bonusCount : '');
-  document.getElementById('tool').textContent =
-    roverState.tool === 'scoop' ? 'TOOL: SCOOP ARM  (swap: Tab)' : 'TOOL: FOOD CANNON  (swap: Tab)';
+  document.getElementById('tool').textContent = isMobile
+    ? 'DRILL + FEED buttons — no tool swapping'
+    : 'DRILL: hold Space · FEED: hold mouse';
   drawDash();
   hudDirty = false;
 }
@@ -1486,37 +1463,38 @@ function updateTurretAndAction(dt) {
   const wantYaw = aimW - rs.yaw;
   let dyaw = ((wantYaw - cannon.rotation.y + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
   cannon.rotation.y += dyaw * Math.min(1, dt * 10);
-  // gentle idle bob on the drill arm when it isn't working
-  const digging = action && rs.tool === 'scoop';
-  if (drillBit) drillBit.rotation.z += (digging ? 22 : 2) * dt;
   if (cannonBarrel) cannonBarrel.position.z = lerp(cannonBarrel.position.z, 0.1, dt * 12); // recover recoil
-  if (!action) { rs.digSnd = 0; scoopArm.rotation.x = lerp(scoopArm.rotation.x, 0, dt * 8); return; }
-  if (rs.tool === 'cannon') {
-    scoopArm.rotation.x = lerp(scoopArm.rotation.x, 0, dt * 8);
-    if (rs.cool <= 0) {
-      rs.cool = CFG.FOOD_COOLDOWN;
-      cannonTip.getWorldPosition(_a);
-      if (inVR && ctrlRight) {
-        ctrlRight.getWorldQuaternion(_qa);
-        _b.set(0, 0, -1).applyQuaternion(_qa);
-        _b.y += 0.1;
-      } else {
-        _b.set(Math.sin(aimW), 0, Math.cos(aimW));
-        _b.y = 0.62; // party-friendly lob arc
-      }
-      fireFood(_a, _b);
-      if (cannonBarrel) cannonBarrel.position.z = -0.05; // recoil kick
+
+  // --- which dig site (if any) is in range? glow the drill ring when one is ---
+  let site = null, bestD = CFG.DIG_RANGE;
+  for (let i = 0; i < digSites.length; i++) {
+    const s = digSites[i];
+    if (s.done) continue;
+    const dd = dist2d(s.x, s.z, rs.x, rs.z);
+    if (dd < bestD) { bestD = dd; site = s; }
+  }
+  toolGlow.visible = !!site;
+
+  // --- FEED: right trigger / mouse / FEED button ---
+  if (actFire && rs.cool <= 0) {
+    rs.cool = CFG.FOOD_COOLDOWN;
+    cannonTip.getWorldPosition(_a);
+    if (inVR && ctrlRight) {
+      ctrlRight.getWorldQuaternion(_qa);
+      _b.set(0, 0, -1).applyQuaternion(_qa);
+      _b.y += 0.1;
+    } else {
+      _b.set(Math.sin(aimW), 0, Math.cos(aimW));
+      _b.y = 0.62; // party-friendly lob arc
     }
-  } else {
-    // scoop: dig the nearest active site in range
-    let site = null, bestD = CFG.DIG_RANGE;
-    for (let i = 0; i < digSites.length; i++) {
-      const s = digSites[i];
-      if (s.done) continue;
-      const dd = dist2d(s.x, s.z, rs.x, rs.z);
-      if (dd < bestD) { bestD = dd; site = s; }
-    }
-    if (!site) { scoopArm.rotation.x = lerp(scoopArm.rotation.x, 0, dt * 8); return; }
+    fireFood(_a, _b);
+    if (cannonBarrel) cannonBarrel.position.z = -0.05; // recoil kick
+  }
+
+  // --- DRILL: left trigger / Space / DRILL button ---
+  const drilling = actDrill && site;
+  if (drillBit) drillBit.rotation.z += (drilling ? 22 : (actDrill ? 8 : 2)) * dt;
+  if (drilling) {
     site.progress += dt / CFG.DIG_TIME;
     site.pil.visible = true;
     site.pil.scale.y = clamp(site.progress, 0.001, 1);
@@ -1530,6 +1508,9 @@ function updateTurretAndAction(dt) {
       puff(site.x + rand(-0.8, 0.8), site.group.position.y + 0.4, site.z + rand(-0.8, 0.8), 2, 0.9, 0xa4562c);
     }
     if (site.progress >= 1) collectSample(site);
+  } else {
+    rs.digSnd = 0;
+    scoopArm.rotation.x = lerp(scoopArm.rotation.x, 0, dt * 8);
   }
 }
 
@@ -1566,7 +1547,7 @@ function updateSites(dt) {
     s.ring.material.color.set(inRange ? 0x7fe36b : 0xffc24b);
     if (inRange && !s.prompted) {
       s.prompted = true;
-      toast(roverState.tool === 'scoop' ? 'Dig site! Hold ACTION to dig' : 'Dig site! Swap to SCOOP, then hold ACTION');
+      toast('Dig site! Hold DRILL to dig');
     }
     if (!inRange) s.prompted = false;
   }
@@ -1593,7 +1574,9 @@ function updateCamera(dt) {
   const rs = roverState;
   if (inVR) {
     dolly.position.set(rs.x, rover.position.y + 1.4, rs.z); // seated on the deck
-    dolly.rotation.set(0, rs.yaw, 0);
+    // headset neutral faces local -z, but the rover model noses along +z;
+    // offset by PI so "forward" for the player == the rover's forward.
+    dolly.rotation.set(0, rs.yaw + Math.PI, 0);
     return;
   }
   // gentle chase: camYaw eases toward behind-the-rover while driving
