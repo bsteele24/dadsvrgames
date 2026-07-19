@@ -73,7 +73,7 @@ const CFG = {
   EDGE_PAD: 6,            // keep rover this far from map edge
   ROVER_SPEED: 13,        // top speed m/s
   ROVER_ACCEL: 16,        // accel toward target speed
-  ROVER_TURN: 1.9,        // rad/s turn rate
+  ROVER_TURN: 1.33,       // rad/s turn rate (reduced 30% for calmer steering)
   CAM_DIST: 11,           // chase camera distance
   CAM_HEIGHT: 4.6,
   MARTIAN_COUNT: 7,       // hungry martians roaming at once
@@ -572,15 +572,21 @@ function buildRover() {
   const seg2 = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.17, 1.0), armMat);
   seg2.position.set(0, 0, 0.5);
   drillHead.add(seg2);
-  // spinning drill bit (cone) at the tip
-  drillBit = new THREE.Mesh(
-    new THREE.ConeGeometry(0.22, 0.7, 10),
-    new THREE.MeshLambertMaterial({ color: 0xffc24b })
-  );
-  drillBit.rotation.x = Math.PI; // tip forward-down along the forearm
-  drillBit.position.set(0, 0, 1.25);
-  drillHead.add(drillBit);
   scoopArm.add(drillHead);
+  // vertical spinning drill bit hanging from the forearm tip — tip points DOWN
+  const drillHub = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.12, 0.12, 0.2, 10),
+    new THREE.MeshLambertMaterial({ color: 0x9aa0a6 })
+  );
+  drillHub.position.set(0, -0.5, 1.92);
+  scoopArm.add(drillHub);
+  drillBit = new THREE.Mesh(
+    new THREE.ConeGeometry(0.2, 0.85, 8),
+    new THREE.MeshLambertMaterial({ color: 0xffc24b, flatShading: true })
+  );
+  drillBit.rotation.x = Math.PI; // apex points straight down
+  drillBit.position.set(0, -1.0, 1.92);
+  scoopArm.add(drillBit);
   rover.add(scoopArm);
 
   // === food cannon on a yaw pivot (rider's RIGHT — matches the right controller) ===
@@ -947,22 +953,22 @@ function updateDust(dt) {
 
 const fireworks = [];
 function spawnFirework(x, y, z, col) {
-  const n = 70;
+  const n = 100;
   const positions = new Float32Array(n * 3);
   const vels = [];
   for (let i = 0; i < n; i++) {
     positions[i * 3] = x; positions[i * 3 + 1] = y; positions[i * 3 + 2] = z;
     const a = rand(0, Math.PI * 2), b = rand(-1, 1);
-    const r = rand(6, 13);
+    const r = rand(13, 26);
     const rr = Math.sqrt(1 - b * b);
-    vels.push(new THREE.Vector3(Math.cos(a) * rr * r, b * r + 3, Math.sin(a) * rr * r));
+    vels.push(new THREE.Vector3(Math.cos(a) * rr * r, b * r + 4, Math.sin(a) * rr * r));
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  const mat = new THREE.PointsMaterial({ color: col, size: 0.55, transparent: true, opacity: 1, depthWrite: false });
+  const mat = new THREE.PointsMaterial({ color: col, size: 1.1, transparent: true, opacity: 1, depthWrite: false });
   const pts = new THREE.Points(geo, mat);
   scene.add(pts);
-  fireworks.push({ pts: pts, vels: vels, life: 1.6 });
+  fireworks.push({ pts: pts, vels: vels, life: 2.2 });
   sfxBoom();
 }
 function updateFireworks(dt) {
@@ -979,11 +985,11 @@ function updateFireworks(dt) {
     const p = fw.pts.geometry.attributes.position;
     for (let j = 0; j < fw.vels.length; j++) {
       const v = fw.vels[j];
-      v.y -= 6 * dt;
+      v.y -= 5 * dt;
       p.setXYZ(j, p.getX(j) + v.x * dt, p.getY(j) + v.y * dt, p.getZ(j) + v.z * dt);
     }
     p.needsUpdate = true;
-    fw.pts.material.opacity = clamp(fw.life / 1.0, 0, 1);
+    fw.pts.material.opacity = clamp(fw.life / 1.4, 0, 1);
   }
 }
 
@@ -1329,11 +1335,11 @@ function buildDashPanel() {
   dashCtx = cv.getContext('2d');
   dashTex = new THREE.CanvasTexture(cv);
   dashPanel = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.95, 0.36),
+    new THREE.PlaneGeometry(0.58, 0.22),
     new THREE.MeshBasicMaterial({ map: dashTex, transparent: true, depthWrite: false })
   );
-  dashPanel.position.set(0, 1.05, -1.35);
-  dashPanel.rotation.x = -0.35;
+  dashPanel.position.set(0, 0.42, -1.0);
+  dashPanel.rotation.x = -0.62;
   dashPanel.visible = false;
   dolly.add(dashPanel);
 }
@@ -1493,7 +1499,7 @@ function updateTurretAndAction(dt) {
 
   // --- DRILL: left trigger / Space / DRILL button ---
   const drilling = actDrill && site;
-  if (drillBit) drillBit.rotation.z += (drilling ? 22 : (actDrill ? 8 : 2)) * dt;
+  if (drillBit) drillBit.rotation.y += (drilling ? 22 : (actDrill ? 8 : 2)) * dt;
   if (drilling) {
     site.progress += dt / CFG.DIG_TIME;
     site.pil.visible = true;
