@@ -29,7 +29,7 @@ canvas{display:block}
 </style>
 </head>
 <body>
-<div id="hud"><span id="log">Samples 0/8 · Fed 0/6 · Sites 0/3</span><span id="tool">DRILL + FEED — no tool swapping</span></div>
+<div id="hud"><span id="log">Samples 0/10 · Fed 0/8 · Sites 0/4</span><span id="tool">DRILL + FEED — no tool swapping</span></div>
 <div id="toast"></div>
 <div id="big"></div>
 <div id="joy"><div id="knob"></div></div>
@@ -75,15 +75,15 @@ const CFG = {
   ROVER_TURN: 1.33,       // rad/s turn rate (reduced 30% for calmer steering)
   CAM_DIST: 11,           // chase camera distance
   CAM_HEIGHT: 4.6,
-  MARTIAN_COUNT: 7,       // hungry martians roaming at once
+  MARTIAN_COUNT: 9,       // hungry martians roaming at once
   MARTIAN_SPEED: 3.4,
   MARTIAN_CHASE_DIST: 45, // they come running from this far
   MARTIAN_NEAR: 6,        // within this range they slow the rover
   MARTIAN_SLOW_EACH: 0.15,// slow per nearby hungry martian
   MARTIAN_SLOW_MAX: 0.4,  // never slower than 60% speed
-  MARTIANS_TO_FEED: 6,    // for the sample log
+  MARTIANS_TO_FEED: 8,    // for the sample log
   DROP_CHANCE: 0.35,      // chance a fed martian drops a crystal
-  DIG_SITES: 8,
+  DIG_SITES: 10,
   DIG_TIME: 1.1,          // seconds of holding to dig
   DIG_RANGE: 6,           // how close the rover must be
   FOOD_SPEED: 24,
@@ -502,11 +502,13 @@ function buildBase() {
 const SAMPLE_NAMES = [
   'Blueberry Geode', 'Ancient Cheese Rock', 'Fizzy Crystal',
   'Petrified Space Potato', 'Marsberry Fossil', 'Glitter Basalt',
-  'Frozen Soda Core', 'Wiggly Magnet Stone'
+  'Frozen Soda Core', 'Wiggly Magnet Stone',
+  'Wobbly Meteorite', 'Sparkleberry Quartz'
 ];
 const SITE_POS = [
   [40, 18], [-55, -30], [82, -72], [-100, 40],
-  [118, 108], [-30, -118], [58, 118], [-128, -42]
+  [118, 108], [-30, -118], [58, 118], [-128, -42],
+  [-115, -95], [88, 30]
 ];
 const digSites = [];
 function buildDigSites() {
@@ -632,6 +634,61 @@ function buildLandmarks() {
     scene.add(g);
     landmarks.push({ name: 'Reid Peak Overlook', x: x, z: z, glow: glow, found: false });
     AVOID.push({ x: x, z: z, r: 8 });
+  }
+  // 4) the InSight lander
+  {
+    const x = 48, z = -78, y = terrainH(x, z);
+    const g = new THREE.Group(); g.position.set(x, y, z);
+    const foilMat = new THREE.MeshLambertMaterial({ color: 0xc9a24a }); // gold foil deck
+    const metalMat = new THREE.MeshLambertMaterial({ color: 0x9aa0a6 });
+    const panelMat = new THREE.MeshLambertMaterial({ color: 0x21408f, emissive: 0x0a1838, side: THREE.DoubleSide });
+    // central deck
+    const deck = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.35, 0.55, 6), foilMat);
+    deck.position.y = 0.85;
+    g.add(deck);
+    const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.18, 6), metalMat);
+    lid.position.y = 1.2;
+    g.add(lid);
+    // three splayed legs with footpads
+    for (let i = 0; i < 3; i++) {
+      const a = i / 3 * Math.PI * 2 + 0.5;
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.2, 6), metalMat);
+      leg.position.set(Math.sin(a) * 1.0, 0.4, Math.cos(a) * 1.0);
+      leg.rotation.set(Math.cos(a) * 0.5, 0, -Math.sin(a) * 0.5);
+      g.add(leg);
+      const foot = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), metalMat);
+      foot.position.set(Math.sin(a) * 1.5, 0.06, Math.cos(a) * 1.5);
+      g.add(foot);
+    }
+    // two big circular fan solar panels (horizontal, on opposite sides)
+    for (let s = -1; s <= 1; s += 2) {
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.09, 0.4), metalMat);
+      arm.position.set(s * 1.5, 0.9, 0);
+      g.add(arm);
+      const panel = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 1.7, 0.06, 20), panelMat);
+      panel.position.set(s * 3.1, 0.92, 0);
+      g.add(panel);
+      // a couple of cell ridges on each panel
+      for (let c = -1; c <= 1; c++) {
+        const ridge = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.08, 3.0), new THREE.MeshLambertMaterial({ color: 0x4a6cc0 }));
+        ridge.position.set(s * 3.1 + c * 0.7, 0.96, 0);
+        g.add(ridge);
+      }
+    }
+    // little instrument mast and the SEIS seismometer dome on the ground
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.1, 6), metalMat);
+    mast.position.set(0.5, 1.5, 0.4);
+    g.add(mast);
+    const seis = new THREE.Mesh(
+      new THREE.SphereGeometry(0.42, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+      new THREE.MeshLambertMaterial({ color: 0xdedede })
+    );
+    seis.position.set(1.9, 0.02, 1.4);
+    g.add(seis);
+    const glow = addLandmarkGlow(g, 4.5);
+    scene.add(g);
+    landmarks.push({ name: 'The InSight Lander', x: x, z: z, glow: glow, found: false });
+    AVOID.push({ x: x, z: z, r: 11 });
   }
 }
 
@@ -1574,7 +1631,7 @@ function drawDash() {
   ctx.fillStyle = '#ffe8d0';
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.font = 'bold 40px sans-serif';
-  ctx.fillText('Samples ' + samples + '/' + CFG.DIG_SITES + '   Fed ' + Math.min(fedCount, CFG.MARTIANS_TO_FEED) + '/' + CFG.MARTIANS_TO_FEED + '   Sites ' + foundCount + '/3', 28, 48);
+  ctx.fillText('Samples ' + samples + '/' + CFG.DIG_SITES + '   Fed ' + Math.min(fedCount, CFG.MARTIANS_TO_FEED) + '/' + CFG.MARTIANS_TO_FEED + '   Sites ' + foundCount + '/' + landmarks.length, 28, 48);
   ctx.font = 'bold 34px sans-serif';
   ctx.fillStyle = '#ffd27a';
   ctx.fillText('L TRIGGER: DRILL   R TRIGGER: FEED' + (bonusCount > 0 ? '   Bonus x' + bonusCount : ''), 28, 104);
@@ -1590,7 +1647,7 @@ function refreshHUD() {
   document.getElementById('log').textContent =
     'Samples ' + samples + '/' + CFG.DIG_SITES +
     ' · Fed ' + Math.min(fedCount, CFG.MARTIANS_TO_FEED) + '/' + CFG.MARTIANS_TO_FEED +
-    ' · Sites ' + foundCount + '/3' +
+    ' · Sites ' + foundCount + '/' + landmarks.length +
     (bonusCount > 0 ? ' · Bonus x' + bonusCount : '');
   document.getElementById('tool').textContent = isMobile
     ? 'DRILL + FEED buttons — no tool swapping'
@@ -1808,7 +1865,7 @@ function updateLandmarks() {
       foundCount++;
       hudDirty = true;
       sfxFanfare();
-      toast('Discovered: ' + lm.name + '! (' + foundCount + '/3)', 3.2);
+      toast('Discovered: ' + lm.name + '! (' + foundCount + '/' + landmarks.length + ')', 3.2);
     }
   }
 }
@@ -1885,7 +1942,7 @@ function startFinale() {
 
 function updateFinale(dt) {
   if (!finale) {
-    if (samples >= CFG.DIG_SITES && fedCount >= CFG.MARTIANS_TO_FEED && foundCount >= 3) startFinale();
+    if (samples >= CFG.DIG_SITES && fedCount >= CFG.MARTIANS_TO_FEED && foundCount >= landmarks.length) startFinale();
     return;
   }
   finaleT += dt;
