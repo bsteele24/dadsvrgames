@@ -31,6 +31,8 @@
     --cd-accent:  #a9dcff;
     --tb-accent:  #4d86ff;
     --rr-accent:  #f0a63c;
+    --mps-accent: #c1662f;
+    --mtr-accent: #7fa8c9;
   }
 
   *{ box-sizing: border-box; }
@@ -291,6 +293,8 @@
   .cabinet.cd{  --accent: var(--cd-accent); }
   .cabinet.tb{  --accent: var(--tb-accent); }
   .cabinet.rr{  --accent: var(--rr-accent); }
+  .cabinet.mps{ --accent: var(--mps-accent); }
+  .cabinet.mtr{ --accent: var(--mtr-accent); }
 
   /* ---------- Footer ---------- */
   footer{
@@ -1537,10 +1541,322 @@
         <div class="play"><span>Explore Mars</span><span class="arrow">▶</span></div>
       </a>
 
+      <!-- ============ MARS PRESUPPLY — STAGE 1 ============ -->
+      <a class="cabinet mps" href="MPS-STAGE1.html" aria-label="Play Mars Presupply, Stage 1">
+        <div class="screen">
+          <span class="badge">VR READY</span>
+          <svg viewBox="0 0 400 250" role="img" aria-label="An orbital mission-control view of a cargo lander burning down toward a landing reticle on Mars">
+            <defs>
+              <linearGradient id="mpsSpace" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#05070f"/>
+                <stop offset="100%" stop-color="#0a1122"/>
+              </linearGradient>
+              <radialGradient id="mpsMars" cx="42%" cy="20%" r="90%">
+                <stop offset="0%" stop-color="#c86636"/>
+                <stop offset="55%" stop-color="#95421f"/>
+                <stop offset="100%" stop-color="#5e2712"/>
+              </radialGradient>
+              <linearGradient id="mpsPlume" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#fff2c2"/>
+                <stop offset="100%" stop-color="#ff8a2f" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+
+            <rect width="400" height="250" fill="url(#mpsSpace)"/>
+
+            <!-- stars -->
+            <g fill="#ffffff">
+              <circle cx="40" cy="30" r="1.2" opacity="0.7"/>
+              <circle cx="110" cy="20" r="1" opacity="0.5"/>
+              <circle cx="300" cy="26" r="1.2" opacity="0.6"/>
+              <circle cx="360" cy="52" r="1" opacity="0.5"/>
+              <circle cx="250" cy="16" r="1" opacity="0.5"/>
+              <circle cx="76" cy="70" r="1" opacity="0.4"/>
+              <circle cx="180" cy="34" r="1" opacity="0.5"/>
+            </g>
+
+            <!-- Mars limb (orbital view) -->
+            <circle cx="200" cy="372" r="238" fill="url(#mpsMars)"/>
+            <!-- thin atmosphere haze on the limb -->
+            <path d="M6,150 A238,238 0 0 1 394,150" fill="none" stroke="#ff9d5a" stroke-width="3" opacity="0.35"/>
+            <path d="M2,146 A242,242 0 0 1 398,146" fill="none" stroke="#ffcf9a" stroke-width="1.5" opacity="0.2"/>
+            <!-- surface features -->
+            <g fill="#7c3418" opacity="0.55">
+              <ellipse cx="120" cy="200" rx="30" ry="10"/>
+              <ellipse cx="300" cy="210" rx="24" ry="8"/>
+              <ellipse cx="210" cy="230" rx="40" ry="11"/>
+            </g>
+            <g fill="none" stroke="#5e2712" stroke-width="1.5" opacity="0.5">
+              <ellipse cx="160" cy="186" rx="14" ry="5"/>
+              <ellipse cx="268" cy="192" rx="11" ry="4"/>
+            </g>
+
+            <!-- landing-zone reticle -->
+            <g stroke="#ffb84d" stroke-width="1.6" fill="none">
+              <path d="M238,150 h-12 v12"/>
+              <path d="M266,150 h12 v12"/>
+              <path d="M238,178 h-12 v-12"/>
+              <path d="M266,178 h12 v-12"/>
+              <line x1="252" y1="158" x2="252" y2="166"/>
+              <line x1="248" y1="164" x2="256" y2="164"/>
+              <circle cx="252" cy="164" r="16" opacity="0.35"/>
+            </g>
+            <text x="282" y="182" font-family="'Share Tech Mono',monospace" font-size="8" fill="#ffb84d" opacity="0.85">LZ-1</text>
+
+            <!-- faint inbound trajectories (the rest of the fleet) -->
+            <g fill="none" stroke="#f0a63c" stroke-width="1" stroke-dasharray="2 5" opacity="0.4">
+              <path d="M40,54 Q120,120 176,158"/>
+              <path d="M356,44 Q320,110 300,168"/>
+            </g>
+            <rect x="104" y="104" width="5" height="5" fill="#c2ccdb" opacity="0.6" transform="rotate(20 106 106)"/>
+            <rect x="330" y="92" width="5" height="5" fill="#c2ccdb" opacity="0.6" transform="rotate(-16 332 94)"/>
+
+            <!-- hero lander descent trajectory -->
+            <path d="M150,36 Q182,72 206,100" fill="none" stroke="#ffb84d" stroke-width="1.6" stroke-dasharray="2 5" opacity="0.85"/>
+
+            <!-- hero cargo lander under retro burn -->
+            <g>
+              <!-- retro plume -->
+              <polygon points="200,120 214,120 210,150 204,150" fill="url(#mpsPlume)"/>
+              <!-- descent stage body -->
+              <polygon points="198,104 216,104 220,118 194,118" fill="#c2ccdb" stroke="#6c7686" stroke-width="1"/>
+              <rect x="199" y="98" width="16" height="7" rx="1.5" fill="#9aa3b0" stroke="#6c7686" stroke-width="0.8"/>
+              <!-- tanks -->
+              <circle cx="201" cy="110" r="3" fill="#8f99a8"/>
+              <circle cx="213" cy="110" r="3" fill="#8f99a8"/>
+              <!-- legs -->
+              <line x1="196" y1="118" x2="190" y2="130" stroke="#8f99a8" stroke-width="1.6"/>
+              <line x1="218" y1="118" x2="224" y2="130" stroke="#8f99a8" stroke-width="1.6"/>
+              <!-- amber blink -->
+              <circle cx="207" cy="98" r="1.6" fill="#ffb84d"/>
+            </g>
+
+            <!-- HUD: corner brackets -->
+            <g stroke="#ffb84d" stroke-width="1.4" fill="none" opacity="0.75">
+              <path d="M12,22 v-10 h10"/>
+              <path d="M388,22 v-10 h-10"/>
+              <path d="M12,228 v10 h10"/>
+              <path d="M388,228 v10 h-10"/>
+            </g>
+
+            <!-- HUD: telemetry text -->
+            <g font-family="'Share Tech Mono',monospace" fill="#ffb84d">
+              <text x="18" y="24" font-size="9">MPS · STAGE 1</text>
+              <text x="18" y="36" font-size="8" opacity="0.7">SOL &#8722;790</text>
+              <text x="382" y="24" font-size="8" text-anchor="end" opacity="0.85">LT 12:40</text>
+            </g>
+
+            <!-- HUD: descent-rate gauge -->
+            <g>
+              <text x="18" y="212" font-family="'Share Tech Mono',monospace" font-size="7.5" fill="#ffb84d" opacity="0.85">DESCENT  1.6 m/s</text>
+              <rect x="18" y="216" width="32" height="8" fill="#4fd07a"/>
+              <rect x="50" y="216" width="28" height="8" fill="#ffcf4d"/>
+              <rect x="78" y="216" width="20" height="8" fill="#ff5b5b"/>
+              <rect x="18" y="216" width="80" height="8" fill="none" stroke="#0a1122" stroke-width="0.6"/>
+              <polygon points="40,214 44,214 42,218" fill="#ffffff"/>
+            </g>
+          </svg>
+        </div>
+        <div class="strip">
+          <h2>Mars Presupply</h2>
+        </div>
+        <div class="body">
+          <p>Run mission control for a robotic Mars presupply, 8 to 24 light-minutes from everything that matters. Pack the manifest, pick launch windows, land three cargo ships, consolidate what survives, and brew rocket fuel from the air — seven missions across fourteen months, all bet on a crew that hasn't launched yet.</p>
+          <div class="meta">CAMPAIGN · STAGE 1 · 7 MISSIONS · VR + BROWSER</div>
+        </div>
+        <div class="play"><span>Enter Mission Control</span><span class="arrow">▶</span></div>
+      </a>
+
+      <!-- ============ JOURNEY TO MARS — STAGE 2 ============ -->
+      <a class="cabinet mtr" href="MTR-STAGE2.html" aria-label="Play Journey to Mars, Stage 2">
+        <div class="screen">
+          <span class="badge">VR READY</span>
+          <svg viewBox="0 0 400 250" role="img" aria-label="A crewed transit spacecraft in deep space with an astronaut on a tether, Earth astern and Mars ahead">
+            <defs>
+              <linearGradient id="mtrSpace" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#050810"/>
+                <stop offset="60%" stop-color="#0a1220"/>
+                <stop offset="100%" stop-color="#101c2e"/>
+              </linearGradient>
+              <linearGradient id="mtrHull" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#e6edf4"/>
+                <stop offset="45%" stop-color="#b7c4d3"/>
+                <stop offset="100%" stop-color="#6c7a8b"/>
+              </linearGradient>
+              <linearGradient id="mtrPanel" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#2c4a72"/>
+                <stop offset="100%" stop-color="#16304f"/>
+              </linearGradient>
+              <radialGradient id="mtrEarth" cx="36%" cy="32%" r="80%">
+                <stop offset="0%" stop-color="#6fb6e8"/>
+                <stop offset="60%" stop-color="#2b6ea8"/>
+                <stop offset="100%" stop-color="#0d2c4c"/>
+              </radialGradient>
+              <radialGradient id="mtrMars" cx="38%" cy="32%" r="80%">
+                <stop offset="0%" stop-color="#e08a52"/>
+                <stop offset="70%" stop-color="#a84c24"/>
+                <stop offset="100%" stop-color="#5e2712"/>
+              </radialGradient>
+            </defs>
+
+            <rect width="400" height="250" fill="url(#mtrSpace)"/>
+
+            <!-- stars -->
+            <g fill="#ffffff">
+              <circle cx="30" cy="52" r="1.2" opacity="0.75"/>
+              <circle cx="96" cy="28" r="1" opacity="0.5"/>
+              <circle cx="146" cy="66" r="1.1" opacity="0.6"/>
+              <circle cx="214" cy="26" r="1" opacity="0.5"/>
+              <circle cx="268" cy="72" r="1.2" opacity="0.65"/>
+              <circle cx="330" cy="34" r="1" opacity="0.5"/>
+              <circle cx="378" cy="96" r="1.1" opacity="0.6"/>
+              <circle cx="56" cy="128" r="1" opacity="0.45"/>
+              <circle cx="120" cy="196" r="1.1" opacity="0.55"/>
+              <circle cx="196" cy="228" r="1" opacity="0.45"/>
+              <circle cx="286" cy="206" r="1.2" opacity="0.6"/>
+              <circle cx="356" cy="176" r="1" opacity="0.5"/>
+            </g>
+
+            <!-- Earth astern, small and receding -->
+            <circle cx="52" cy="196" r="17" fill="url(#mtrEarth)"/>
+            <path d="M42,190 q7,-4 13,1 q-6,4 -13,-1 Z" fill="#4e9b5a" opacity="0.75"/>
+            <path d="M50,203 q9,-3 14,2" stroke="#9fd3f0" stroke-width="1.5" fill="none" opacity="0.5"/>
+            <text x="52" y="224" font-family="'Share Tech Mono',monospace" font-size="7" fill="#7fa8c9" text-anchor="middle" opacity="0.8">EARTH</text>
+
+            <!-- Mars ahead, distant -->
+            <circle cx="348" cy="60" r="11" fill="url(#mtrMars)"/>
+            <text x="348" y="82" font-family="'Share Tech Mono',monospace" font-size="7" fill="#c1662f" text-anchor="middle" opacity="0.85">MARS</text>
+
+            <!-- cruise trajectory arc -->
+            <path d="M74,186 Q200,150 336,70" fill="none" stroke="#7fa8c9" stroke-width="1.2" stroke-dasharray="2 6" opacity="0.5"/>
+
+            <!-- ================= transit stack ================= -->
+            <g transform="translate(196,132) rotate(-14)">
+              <!-- solar arrays -->
+              <g>
+                <line x1="-14" y1="0" x2="-14" y2="-38" stroke="#8f9dad" stroke-width="2"/>
+                <rect x="-46" y="-64" width="64" height="26" rx="2" fill="url(#mtrPanel)"/>
+                <rect x="-46" y="-64" width="64" height="26" rx="2" fill="none" stroke="#6c8299" stroke-width="1"/>
+                <g stroke="#43689b" stroke-width="0.8">
+                  <line x1="-46" y1="-51" x2="18" y2="-51"/>
+                  <line x1="-25" y1="-64" x2="-25" y2="-38"/>
+                  <line x1="-4" y1="-64" x2="-4" y2="-38"/>
+                </g>
+                <line x1="-14" y1="0" x2="-14" y2="38" stroke="#8f9dad" stroke-width="2"/>
+                <rect x="-46" y="38" width="64" height="26" rx="2" fill="url(#mtrPanel)" stroke="#6c8299" stroke-width="1"/>
+                <g stroke="#43689b" stroke-width="0.8">
+                  <line x1="-46" y1="51" x2="18" y2="51"/>
+                  <line x1="-25" y1="38" x2="-25" y2="64"/>
+                  <line x1="-4" y1="38" x2="-4" y2="64"/>
+                </g>
+              </g>
+
+              <!-- truss spine -->
+              <rect x="-86" y="-5" width="172" height="10" rx="2" fill="#7d8a99"/>
+              <g stroke="#5a6675" stroke-width="1">
+                <line x1="-76" y1="-5" x2="-64" y2="5"/>
+                <line x1="-64" y1="-5" x2="-52" y2="5"/>
+                <line x1="-52" y1="-5" x2="-40" y2="5"/>
+                <line x1="44" y1="-5" x2="56" y2="5"/>
+                <line x1="56" y1="-5" x2="68" y2="5"/>
+                <line x1="68" y1="-5" x2="80" y2="5"/>
+              </g>
+
+              <!-- habitat module -->
+              <rect x="-40" y="-17" width="76" height="34" rx="16" fill="url(#mtrHull)" stroke="#5f6c7c" stroke-width="1.5"/>
+              <!-- window band -->
+              <g>
+                <circle cx="-22" cy="0" r="3.6" fill="#9fe6ff" stroke="#5f6c7c" stroke-width="1"/>
+                <circle cx="-8" cy="0" r="3.6" fill="#9fe6ff" stroke="#5f6c7c" stroke-width="1"/>
+                <circle cx="6" cy="0" r="3.6" fill="#ffd98a" stroke="#5f6c7c" stroke-width="1"/>
+              </g>
+              <!-- spin ring (centrifuge) -->
+              <ellipse cx="-2" cy="0" rx="30" ry="30" fill="none" stroke="#a8b6c6" stroke-width="3" opacity="0.9"/>
+              <ellipse cx="-2" cy="0" rx="30" ry="30" fill="none" stroke="#d7e2ee" stroke-width="1" opacity="0.6"/>
+              <g fill="#8f9dad">
+                <rect x="-5" y="-31" width="6" height="7" rx="1"/>
+                <rect x="-5" y="24" width="6" height="7" rx="1"/>
+              </g>
+
+              <!-- docked capsule, forward -->
+              <path d="M36,-11 L52,-11 Q64,-11 68,0 Q64,11 52,11 L36,11 Z" fill="url(#mtrHull)" stroke="#5f6c7c" stroke-width="1.3"/>
+              <rect x="68" y="-4" width="7" height="8" rx="2" fill="#6c7a8b"/>
+
+              <!-- aft service module + engine bell -->
+              <rect x="-72" y="-13" width="32" height="26" rx="4" fill="#9aa8b8" stroke="#5f6c7c" stroke-width="1.3"/>
+              <polygon points="-72,-10 -86,-16 -86,16 -72,10" fill="#6c7a8b" stroke="#4a5563" stroke-width="1"/>
+              <!-- radiator fin -->
+              <rect x="-64" y="-30" width="20" height="14" rx="2" fill="#c6d2df" stroke="#6c8299" stroke-width="1"/>
+
+              <!-- comms dish -->
+              <line x1="20" y1="-16" x2="26" y2="-28" stroke="#8f9dad" stroke-width="1.6"/>
+              <ellipse cx="27" cy="-31" rx="8" ry="4.6" fill="#c6d2df" stroke="#7d8a99" stroke-width="1" transform="rotate(-38 27 -31)"/>
+
+              <!-- nav strobe -->
+              <circle cx="52" cy="-11" r="1.8" fill="#ff5b5b"/>
+              <circle cx="-40" cy="13" r="1.8" fill="#4fd07a"/>
+            </g>
+
+            <!-- ================= EVA astronaut on tether ================= -->
+            <path d="M228,120 C258,116 274,104 292,92" fill="none" stroke="#e8eef5" stroke-width="1.2" opacity="0.85"/>
+            <g transform="translate(296,88) rotate(18)">
+              <!-- backpack -->
+              <rect x="-7" y="-6" width="9" height="14" rx="3" fill="#c6d2df" stroke="#6c7a8b" stroke-width="0.8"/>
+              <!-- torso -->
+              <rect x="-3" y="-7" width="12" height="16" rx="5" fill="#f2f6fa" stroke="#7d8a99" stroke-width="1"/>
+              <!-- helmet -->
+              <circle cx="10" cy="-9" r="6" fill="#f2f6fa" stroke="#7d8a99" stroke-width="1"/>
+              <path d="M12,-12 a5,5 0 0 1 1,6 a5,5 0 0 1 -6,-1 Z" fill="#2b3f57"/>
+              <circle cx="11" cy="-11" r="1.4" fill="#9fe6ff" opacity="0.9"/>
+              <!-- arms -->
+              <path d="M2,-4 q10,-3 15,-9" stroke="#f2f6fa" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+              <path d="M2,3 q11,2 16,-2" stroke="#f2f6fa" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+              <!-- legs -->
+              <path d="M-1,8 q-2,10 3,14" stroke="#f2f6fa" stroke-width="4" fill="none" stroke-linecap="round"/>
+              <path d="M6,8 q3,10 9,11" stroke="#f2f6fa" stroke-width="4" fill="none" stroke-linecap="round"/>
+              <!-- suit stripes -->
+              <line x1="-3" y1="0" x2="9" y2="0" stroke="#7fa8c9" stroke-width="1.2"/>
+            </g>
+
+            <!-- HUD: corner brackets -->
+            <g stroke="#7fa8c9" stroke-width="1.4" fill="none" opacity="0.75">
+              <path d="M12,22 v-10 h10"/>
+              <path d="M388,22 v-10 h-10"/>
+              <path d="M12,228 v10 h10"/>
+              <path d="M388,228 v10 h-10"/>
+            </g>
+
+            <!-- HUD: telemetry -->
+            <g font-family="'Share Tech Mono',monospace" fill="#7fa8c9">
+              <text x="18" y="24" font-size="9">MTR · STAGE 2</text>
+              <text x="18" y="36" font-size="8" opacity="0.7">FLIGHT DAY 104 / 210</text>
+              <text x="382" y="24" font-size="8" text-anchor="end" opacity="0.85">EVA ACTIVE</text>
+            </g>
+
+            <!-- HUD: transit progress bar -->
+            <g>
+              <text x="18" y="212" font-family="'Share Tech Mono',monospace" font-size="7.5" fill="#7fa8c9" opacity="0.85">TRANSIT</text>
+              <rect x="60" y="205" width="100" height="7" rx="3" fill="#1b2a3d"/>
+              <rect x="60" y="205" width="100" height="7" rx="3" fill="none" stroke="#3d5670" stroke-width="1"/>
+              <rect x="61" y="206" width="49" height="5" rx="2.5" fill="#7fa8c9"/>
+              <circle cx="110" cy="208.5" r="2.6" fill="#e8eef5"/>
+            </g>
+          </svg>
+        </div>
+        <div class="strip">
+          <h2>Journey to Mars</h2>
+        </div>
+        <div class="body">
+          <p>Ride the crewed transit stack across 210 days of deep space. Fly the ascent and the burns, work the consoles through midcourse corrections and a solar storm, keep life support balanced, and go outside on the tether when something breaks. Ten missions, one long cruise.</p>
+          <div class="meta">CAMPAIGN · STAGE 2 · 10 MISSIONS · VR + BROWSER</div>
+        </div>
+        <div class="play"><span>Board the Transit Stack</span><span class="arrow">▶</span></div>
+      </a>
+
     </main>
 
     <footer>
-      <span class="pulse">▸</span> 10 games loaded · built for headsets and browsers
+      <span class="pulse">▸</span> 12 games loaded · built for headsets and browsers
     </footer>
   </div>
 </body>
